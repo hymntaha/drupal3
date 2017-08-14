@@ -1,0 +1,31 @@
+<?php
+// $Id: ip2locale.install,v 1.1.2.3 2009/10/03 10:31:27 mrfelton Exp $
+
+/**
+ * @file
+ * Install file for IP to Locale module.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function ip2locale_uninstall() {
+  // TODO Please review the conversion of this statement to the D7 database API syntax.
+  /* db_query("DELETE FROM {variable} WHERE name LIKE 'ip2locale_%'") */
+  db_delete('variable')
+  ->condition('name', 'ip2locale_%', 'LIKE')
+  ->execute();
+}
+
+/**
+ * Implements hook_update_N().
+ */
+function ip2locale_update_6100() {
+  $ret = array();
+  variable_set('ip2locale_backend_ip2country_enabled', variable_get('ip2locale_backend_uc_ip2country_enabled', 0));
+  variable_del('ip2locale_backend_uc_ip2country_enabled');
+  // hook_update_N() no longer returns a $ret array. Instead, return
+  // nothing or a translated string indicating the update ran successfully.
+  // See http://drupal.org/node/224333#update_sql.
+  return t('TODO Add a descriptive string here to show in the UI.') /* $ret */;
+}

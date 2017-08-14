@@ -1,0 +1,70 @@
+<?php
+// $Id: ip2locale_webhostinginfo.install,v 1.1.2.8.2.13 2009/12/13 11:52:51 mrfelton Exp $
+
+/**
+ * @file
+ * Install file for IP to Country module.
+ */
+
+include_once DRUPAL_ROOT . '/' . drupal_get_path('module', 'ip2locale_webhostinginfo') . '/ip2locale_webhostinginfo.inc';
+
+/**
+ * Implements hook_schema().
+ */
+function ip2locale_webhostinginfo_schema() {
+  $schema['ip2locale_webhostinginfo'] = array(
+    'description' => 'IP2Locale Webhostinginfo IP lookup table',
+    'fields' => array(
+      'ip_from' => array(
+        'description' => 'IP range start',
+        'type' => 'float',
+        'size' => 'big',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'ip_to' => array(
+        'description' => 'IP range end',
+        'type' => 'float',
+        'size' => 'big',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'iso2' => array(
+        'description' => 'ISO2 2 letter country code',
+        'type' => 'char',
+        'length' => 2,
+        'not null' => TRUE,
+      ),
+      'iso3' => array(
+        'description' => 'ISO3 3 letter country code',
+        'type' => 'char',
+        'length' => 3,
+        'not null' => TRUE,
+      ),
+      'name' => array(
+        'description' => 'Printable country name',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('ip_from', 'ip_to'),
+  );
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function ip2locale_webhostinginfo_install() {
+  ip2locale_webhostinginfo_batch_insert();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function ip2locale_webhostinginfo_uninstall() {
+  db_delete('variable')
+  ->condition('name', 'ip2locale_webhostinginfo_last_update')
+  ->execute();
+}

@@ -1,0 +1,125 @@
+body {
+  @media (max-width: @screen-xs-max) {
+    padding-top: 60px;
+  }
+  &.cke_editable {
+    padding-top: 0;
+  }
+}
+
+.main-container {
+  padding-bottom: 20px;
+  @media (max-width: @screen-sm-max) {
+    .map-page & {
+      padding-bottom: 0;
+      width: 100%;
+    }
+  }
+  @media (min-width: @screen-md-min) and (max-width: @screen-md-max) {
+    .touch .map-page & {
+      padding-bottom: 0;
+      width: 100%;
+    }
+  }
+}
+
+.region-content {
+  position: relative;
+}
+
+.breadcrumb {
+  margin-bottom: 15px;
+  li,
+  a {
+    font-size: 11px;
+    line-height: 30px;
+  }
+
+  .page-checkout & {
+    display: none;
+  }
+}
+
+.page-header {
+  font-weight: 900;
+  text-transform: uppercase;
+  .spacing-reset;
+  margin-top: 0;
+  margin-bottom: 22px;
+
+  .page-checkout & {
+    display: none;
+  }
+}
+
+.entity-content-container {
+  position: relative;
+  width: 100%;
+  .background-cover;
+}
+
+.content-container-content-container {
+  padding: 25px;
+  margin-bottom: 10px;
+  cursor: pointer;
+
+  &.no-link {
+    > .content {
+      padding-bottom: 0;
+    }
+  }
+
+  .block-opentourny & {
+    margin-bottom: 0;
+  }
+
+  > .content {
+    padding-bottom: 45px;
+  }
+
+  h4 {
+    margin-top: 0;
+    text-transform: uppercase;
+  }
+
+  .field-name-field-cc-link {
+    font-size: 14px;
+    line-height: 19px;
+    position: absolute;
+    bottom: 25px;
+    left: 25px;
+  }
+}
+
+.footer-ad-links {
+
+  padding-top: 20px;
+  border-top: 1px solid @otny_border;
+
+  & > .row {
+
+    & > div {
+      .row {
+        & > div {
+          img {
+            width: 100%;
+            max-width: 125px;
+
+          }
+
+        }
+        & > div:first-child {
+          & > p {
+            line-height: 56px;
+
+            @media (max-width: @screen-sm-max) {
+              font-size: 11px;
+              line-height: 29px;
+            }
+
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+; $Id: ip2locale.info,v 1.1 2009/05/01 21:25:04 mrfelton Exp $
+name         = IP to Locale
+description  = IP to country lookup
+package      = Location
+core = 7.x
+files[] = ip2locale.admin.inc
+files[] = ip2locale.install
+files[] = ip2locale.module
+files[] = tests/ip2locale.test
+
+; Information added by drupal.org packaging script on 2013-09-30
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "ip2locale"
+datestamp = "1380583536"
+

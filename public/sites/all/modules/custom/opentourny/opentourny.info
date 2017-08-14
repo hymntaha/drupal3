@@ -1,0 +1,6 @@
+name = OpenTourNY
+description = OpenTourNY General Settings
+package = OpenTourNY
+core = 7.x
+
+dependencies[] = eck

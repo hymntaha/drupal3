@@ -1,0 +1,7 @@
+name = Route
+description = Route processing
+package = OpenTourNY
+core = 7.x
+version = 7.x-1.2
+
+dependencies[] = opentourny

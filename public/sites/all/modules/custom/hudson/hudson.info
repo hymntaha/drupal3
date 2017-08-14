@@ -1,0 +1,6 @@
+name = Hudson
+description = Hudson Iframe Integration
+package = OpenTourNY
+core = 7.x
+
+dependencies[] = opentourny

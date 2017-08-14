@@ -1,0 +1,13 @@
+name = OpenTourNY Cart
+description = OpenTourNY Cart/Checkout
+package = OpenTourNY
+core = 7.x
+version = 7.x-1.1
+
+files[] = classes/Cart.php
+files[] = classes/CartLineItem.php
+files[] = classes/Checkout.php
+files[] = classes/CheckoutPayment.php
+files[] = classes/CheckoutPaymentCreditCard.php
+files[] = classes/CheckoutPaymentPaypal.php
+files[] = classes/TransMach/TransMach.php

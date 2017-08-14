@@ -1,0 +1,276 @@
+<?php
+// $Id: ip2locale.module,v 1.1.2.19 2010/05/07 12:19:02 mrfelton Exp $
+
+/**
+ * @file
+ * Redirect users to site version based on IP address.
+ *
+ * This module redirect users to a specific site version
+ * based on their IP address. It can use one or more IP lookup
+ * modules to translate the users detected IP address into a
+ * country code.
+ *
+ * @author Tom Kirkpatrick (mrfelton), www.kirkdesigns.co.uk
+ */
+
+/**
+ * Implements hook_help().
+ */
+function ip2locale_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#ip2locale':
+      $output = '<p>' . t('Drupal is set up fairly well for multilingual sites. However, it does make the assumption that each site version will be in a different language. It is quite feasible however, that there be two versions of a site in the same language. For example, a site which has a UK version, and a version for the Republic of Ireland. Both sites are written in English, but the content varies for each. Drupals multilingual features provide the perfect tools to allow \'translation\' of content from one version of the site to another, but in a setup like this, it may also be desirable to automatically redirect users to a particular version of the site based on their IP address...') . '</p>';
+      $output .= '<p>' . t('IP 2 Locale is able to redirect users to a specific site version based on the originating country of their IP address. It can use one or more IP lookup modules to translate the users IP address into a country code. Mappings can then be provided from country code to language code, and these mappings will be used to determine which version of the site to redirect to.', array('@content-help' => url('admin/help/translation'))) . '</p>';
+      $output .= '<p>' . t('IP to Locale currently supports IP to Country lookup by one or more of the following modules:') . '</p>';
+      $output .= '<ul><li>' . t('<a href="@ip2cc">ip2cc</a>', array('@ip2cc' => 'http://drupal.org/project/ip2cc')) . '</li>';
+      $output .= '<li>' . t('<a href="@ip2country">ip2country</a>', array('@ip2country' => 'http://drupal.org/project/ip2country')) . '</li>';
+      $output .= '<li>' . t('<a href="@geoip">geoip</a>', array('@geoip' => 'http://drupal.org/project/geoip')) . '</li></ul>';
+      return $output;
+    case 'admin/config/regional/ip2locale':
+    case 'admin/config/regional/ip2locale/settings':
+      $output = '<p>' . t('IP 2 Locale settings') . '</p>';
+      return $output;
+    case 'admin/config/regional/ip2locale/providers':
+      $output = '<p>';/* . t('This page provides an overview of installed IP to Country lookup providers. IP to Locale currently supports IP to Country lookup by one or more of the following modules:') . '</p>';
+      $output .= '<ul><li>' . t('<a href="@ip2cc">ip2cc</a>', array('@ip2cc' => 'http://drupal.org/project/ip2cc')) . '</li>';
+      $output .= '<li>' . t('<a href="@ip2country">ip2country</a>', array('@ip2country' => 'http://drupal.org/project/ip2country')) . '</li>';
+      $output .= '<li>' . t('<a href="@geoip">geoip</a>', array('@geoip' => 'http://drupal.org/project/geoip')) . '</li></ul>';
+      */$output .= '<p>' . t('You may use this page to enable/disable installed providers as well as ordering them as you see fit. Providers will be tried in the order listed on this page. If one provider fails to map a users IP address to a country, the next provider in the list is tried.') . '</p>';
+      return $output;
+    case 'admin/config/regional/ip2locale/provider-settings':
+      $output = '<p>' . t('This page allows configuration of each installed IP to Locale data provider.') . '</p>';
+      return $output;  
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function ip2locale_menu() {
+  $items['admin/config/regional/ip2locale'] = array(
+    'title' => 'IP to Locale',
+    'description' => 'Settings for IP to Locale.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ip2locale_admin_settings'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'ip2locale.admin.inc',
+  );
+  $items['admin/config/regional/ip2locale/settings'] = array(
+    'title' => 'Settings',
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+  $items['admin/config/regional/ip2locale/providers'] = array(
+    'title' => 'Providers',
+    'description' => 'Manage IP to Country data providers.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ip2locale_module_settings'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'ip2locale.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => -5,
+  );
+  $items['ip2locale/ajax/toggle_provider/%/%'] = array(
+    'title' => 'ajax add',
+    'access arguments' => array('administer site configuration'),
+    'page callback' => 'ip2locale_ajax_toggle_provider',
+    'page arguments' => array(3, 4),
+    'type' => MENU_CALLBACK,
+  );
+  $items['ip2locale/provider'] = array(
+    'title' => 'IP to Locale provider',
+    'page callback' => 'ip2locale_provider_page',
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function ip2locale_requirements($phase) {
+  $requirements = array();
+
+  // Retrieve the appropriate localisation function name
+  $t = get_t();
+
+  $requirements['provider']['title'] = $t('IP to Locale');
+
+  // Test for a valid provider
+  if (!module_implements('ip2locale_info')) {
+    $requirements['provider']['value'] = $t('No IP -> country lookup modules available');
+    $requirements['provider']['description'] = $t('There are no ip2country lookup modules installed. Please install one or more supported modules.');
+    $requirements['provider']['severity'] = REQUIREMENT_ERROR;
+  }
+  else {
+    $providers = ip2locale_provider_list('available');
+    $requirements['provider']['value'] = $t('IP address lookup is provided by: !providers', array('!providers' => join(', ', $providers)));
+    $requirements['provider']['severity'] = REQUIREMENT_OK;
+  }
+  return $requirements;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function ip2locale_theme() {
+  return array(
+    'ip2locale_module_settings' => array(
+      'render element' => 'form',
+      'file' => 'ip2locale.admin.inc',
+    ),
+  );
+}
+
+/**
+ * Implements hook_init().
+ */
+function ip2locale_init() {
+  global $language;
+  if (variable_get('ip2locale_save_locale', TRUE)) {
+    setcookie('ip2locale_lc', $language->language, REQUEST_TIME + 60 * 60 * 24 * 30, '/');
+  }
+}
+
+/**
+ * Menu callback for (un)enabling a provider.
+ *
+ * Used both for the regular callback as well as the JS version.
+ */
+function ip2locale_provider_page($action, $provider) {
+  $js = isset($_REQUEST['has_js']);
+
+  $result = _ip2locale_toggle_provider($provider, $action);
+  if (!$result) {
+    $error = t('You are not allowed to enable or disable this provider.');
+  }
+
+  // If an error was received, set a message and exit.
+  if (isset($error)) {
+    drupal_set_message($error);
+    drupal_access_denied();
+    return;
+  }
+  drupal_set_message('Status of ' . $provider . ' updated.');
+  drupal_goto('admin/config/regional/ip2locale/providers');
+}
+
+/**
+ * Helper function to get the current ip address
+ */
+function ip2locale_ip_address() {
+  if (variable_get('ip2locale_debug', FALSE) && !empty($_GET['ip2locale_debug'])) {
+    $ip = $_GET['ip2locale_debug'];
+    drupal_set_message('IP to Locale debug: Using IP ' . $ip);
+  }
+  else {
+    $ip = ip_address();
+  }
+  return $ip;
+}
+
+
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
+function ip2locale_get_locale($addr=NULL) {
+  $ip = !empty($addr) ? $addr : ip2locale_ip_address($addr);
+  $providers = ip2locale_provider_list('enabled');
+  foreach ($providers as $provider => $weight) {
+    // Make sure the module is loaded, since we could be running from hook_boot.
+    drupal_load('module', $provider);
+    if ($data = module_invoke($provider, 'ip2locale_get_locale', $ip)) {
+      if (variable_get('ip2locale_debug', FALSE)) {
+        drupal_set_message(t('IP to Locale debug: Got data from !provider: @data', array('!provider' => $provider, '@data' => print_r($data, 1))));
+      }
+      return $data;
+    }
+  } 
+  return NULL;
+}
+
+
+/**
+ * @todo Please document this function.
+ * @see http://drupal.org/node/1354
+ */
+function ip2locale_provider_list($status = 'enabled', $reset=FALSE) {
+  switch ($status) {
+    case 'available':
+      return _ip2locale_available_providers($reset);
+
+    case 'enabled':
+      return _ip2locale_enabled_providers($reset);
+  }
+}
+
+/**
+ * Get a list of available providers for IP to Country lookups.
+ *
+ * @return
+ *   An array containing the module names of available providers.
+ */
+function _ip2locale_available_providers($reset=FALSE) {
+  $available_providers = &drupal_static(__FUNCTION__);
+  if ($reset) {
+    cache_clear_all();
+    $providers = module_implements('ip2locale_info', TRUE);
+  }
+  else {
+    $providers = variable_get('ip2locale_available_providers', array());
+  }
+  if (empty($available_providers)) {
+    $available_providers = array();
+    $weights = array();
+    foreach ($providers as $provider) {
+      $available_providers[$provider] = variable_get('ip2locale_provider_' . $provider . '_weight', 50);
+    }
+    $available_providers = _ip2locale_sort_providers($available_providers);
+    variable_set('ip2locale_available_providers', $available_providers);
+  }
+  return $available_providers;
+}
+
+/**
+ * Get a list of enabled providers for IP to Country lookups.
+ *
+ * @return
+ *   An ordered array containing the module names of enables providers.
+ */
+function _ip2locale_enabled_providers($reset=FALSE) {
+  $enabled_providers = array();
+  $available_providers = _ip2locale_available_providers($reset);
+  foreach ($available_providers as $provider) {
+    if (variable_get('ip2locale_provider_' . $provider . '_enabled', FALSE)) {
+      $enabled_providers[$provider] = $available_providers[$provider];
+    }
+  }
+  return _ip2locale_sort_providers($enabled_providers);
+}
+
+function _ip2locale_sort_providers($providers) {
+  asort($providers);
+  foreach ($providers as $module => $weight) {
+    $providers[$module] = $module;
+  }
+  return $providers;
+}
+
+function _ip2locale_toggle_provider($provider, $status) {
+  $available_providers = ip2locale_provider_list('available');
+  $status = $status == 'enable' ? TRUE : FALSE;
+
+  if (!$available_providers[$provider]) {
+    return array('error' => t('Provider not available'));
+  }
+
+  variable_set('ip2locale_provider_' . $provider . '_enabled', $status);
+
+  return array(
+    'status' => 1,
+    'data' => 'enabled',
+  );
+}

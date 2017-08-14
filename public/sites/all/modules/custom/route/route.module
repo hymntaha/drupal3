@@ -1,0 +1,662 @@
+<?php
+
+define('TOURS_STOPS_NID', 17);
+define('UPTOWN_ROUTE_NID', 9);
+define('DOWNTOWN_ROUTE_NID', 16);
+
+/**
+ * Implements hook_menu().
+ */
+function route_menu() {
+  $items['poi/autocomplete'] = array(
+    'title'            => 'POI Autocomplete',
+    'page callback'    => '_route_poi_autocomplete',
+    'access arguments' => array('access content'),
+    'type'             => MENU_CALLBACK,
+    'file' => 'route.pages.inc',
+  );
+
+  $items['admin/opentourny/map'] = array(
+    'title'            => 'Map Settings',
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array('route_map_admin_settings_form'),
+    'access arguments' => array('access opentourny settings'),
+    'file'             => 'route.admin.inc',
+  );
+
+  $items['ajax/bus_locations'] = array(
+    'title'            => 'Bus Locations',
+    'page callback'    => 'route_get_bus_locations',
+    'page arguments'   => array(TRUE),
+    'access arguments' => array('access content'),
+    'type'             => MENU_CALLBACK,
+    'delivery callback' => 'ajax_deliver',
+    'file' => 'route.pages.inc',
+  );
+
+  $items['cron/bus-locations'] = array(
+    'title' => 'Pull Bus Locations',
+    'page callback' => 'route_cron_pull_bus_locations_callback',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+    'file' => 'route.cron.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_node_view().
+ */
+function route_node_view($node, $view_mode, $langcode) {
+  if ($node->type == 'route') {
+    if ($view_mode == 'full') {
+      if (!empty($node->field_detail_title[$langcode][0]['value'])) {
+        drupal_set_title($node->field_detail_title[$langcode][0]['value']);
+      }
+    }
+    if ($view_mode == 'map') {
+      $node->content['field_geojson'][0]['#attached']['js'][0]['data']['leaflet'][0]['features'][0]['options']['color']     = '#' . opentourny_get_hex_color($node->field_background_color[LANGUAGE_NONE][0]['value']);
+      $node->content['field_geojson'][0]['#attached']['js'][0]['data']['leaflet'][0]['features'][0]['options']['fill']      = FALSE;
+      $node->content['field_geojson'][0]['#attached']['js'][0]['data']['leaflet'][0]['features'][0]['options']['noClip']    = TRUE;
+      $node->content['field_geojson'][0]['#attached']['js'][0]['data']['leaflet'][0]['features'][0]['options']['opacity']   = 1;
+      $node->content['field_geojson'][0]['#attached']['js'][0]['data']['leaflet'][0]['features'][0]['options']['className'] = 'map-route';
+      $node->content['field_geojson'][0]['#attached']['js'][0]['data']['leaflet'][0]['features'][0]['options']['nid']       = (int) $node->nid;
+
+      if (_route_get_line_type($node) == 'dotted') {
+        $node->content['field_geojson'][0]['#attached']['js'][0]['data']['leaflet'][0]['features'][0]['options']['dashArray'] = '5,10';
+      }
+    }
+    if ($view_mode == 'line') {
+      $node->content['title_field'][0]['#markup'] = '<p><strong>' . t('This stop is featured in the') . ':</strong> ' . $node->content['title_field'][0]['#markup'] . '</p>';
+    }
+  }
+  if ($node->type == 'route_landing') {
+    if ($view_mode == 'full') {
+      drupal_add_js(drupal_get_path('module', 'route') . '/js/route_landing.js');
+    }
+  }
+  if ($node->type == 'bus_stop') {
+    if ($view_mode == 'line') {
+      $node->content['icon']['#markup'] = route_point_get_icon_url($node, 'bus_stop_line', $langcode);
+      $node->content['has_icon']        = FALSE;
+      if (isset($node->field_map_icon[LANGUAGE_NONE][0])) {
+        $node->content['has_icon'] = TRUE;
+      }
+      $node->content['title_field'][0]['#markup'] = '<p>' . $node->content['title_field'][0]['#markup'] . '</p>';
+    }
+  }
+  if ($node->type == 'poi' || $node->type == 'neighborhood') {
+    if ($view_mode == 'teaser') {
+      $node->content['title_field'][0]['#markup'] = l($node->content['title_field'][0]['#markup'], 'node/' . $node->nid, array('html' => TRUE));
+      $node->content['teaser_image']              = array();
+      if (isset($node->field_slideshow[$langcode][0]['target_id'])) {
+        $slideshow                     = entity_load_single('slideshow', $node->field_slideshow[$langcode][0]['target_id']);
+        $node->content['teaser_image'] = array(
+          '#theme'       => 'image_formatter',
+          '#item'        => array(
+            'width'      => $slideshow->field_slideshow_image[LANGUAGE_NONE][0]['width'],
+            'height'     => $slideshow->field_slideshow_image[LANGUAGE_NONE][0]['height'],
+            'uri'        => $slideshow->field_slideshow_image[LANGUAGE_NONE][0]['uri'],
+            'attributes' => array(
+              'class' => 'img-responsive teaser-image',
+            ),
+          ),
+          '#image_style' => 'poi_teaser',
+          '#path'        => array(
+            'path' => 'node/' . $node->nid,
+          ),
+        );
+      }
+    }
+  }
+  if (in_array($node->type, route_valid_point_types())) {
+    if ($view_mode == 'popup') {
+      $query = array('mc' => 1);
+      if (module_exists('mobile_detect')) {
+        $is_mobile = mobile_detect_get_object()->isMobile();
+        if (!$is_mobile) {
+          $query = array();
+        }
+      }
+      $node->content['title_field'][0]['#markup'] = l($node->content['title_field'][0]['#markup'], 'node/' . $node->nid, array(
+        'html'  => TRUE,
+        'query' => $query
+      ));
+    }
+  }
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function route_node_insert($node) {
+  if ($node->type == 'poi') {
+    route_set_bus_stop_poi($node);
+  }
+}
+
+/**
+ * Implements hook_node_update().
+ */
+function route_node_update($node) {
+  if ($node->type == 'poi') {
+    route_set_bus_stop_poi($node);
+  }
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ */
+function route_entity_info_alter(&$entity_info) {
+  $entity_info['node']['view modes']['map']   = array(
+    'label'           => t('Map'),
+    'custom settings' => TRUE,
+  );
+  $entity_info['node']['view modes']['line']  = array(
+    'label'           => t('Line'),
+    'custom settings' => TRUE,
+  );
+  $entity_info['node']['view modes']['popup'] = array(
+    'label'           => t('Popup'),
+    'custom settings' => TRUE,
+  );
+}
+
+/**
+ * Implements hook_js_alter().
+ */
+function route_js_alter(&$javascript) {
+  if (isset($javascript['sites/all/modules/contrib/leaflet/leaflet.drupal.js'])) {
+    $javascript['sites/all/modules/contrib/leaflet/leaflet.drupal.js']['data'] = drupal_get_path('module', 'route') . '/js/route.leaflet.drupal.js';
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function route_theme($existing, $type, $theme, $path) {
+  return array(
+    'leaflet_control_options_extra' => array(
+      'template'  => 'leaflet-control-options-extra',
+      'variables' => array('control_links' => array()),
+    ),
+  );
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function route_block_info() {
+  $blocks['map'] = array(
+    'info'  => t('Map'),
+    'cache' => DRUPAL_NO_CACHE
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function route_block_view($delta = '') {
+  $block = array();
+
+  switch ($delta) {
+    case 'map':
+      $block['subject'] = '';
+      $map              = '';
+      if ($node = menu_get_object()) {
+        if (route_type_is_map_valid($node->type)) {
+          $map = route_get_map(route_get_map_settings($node));
+        }
+      }
+      $block['content'] = $map;
+      break;
+
+  }
+  return $block;
+}
+
+function route_get_map_settings($node) {
+  if (isset($node->field_map_center[LANGUAGE_NONE][0])) {
+    $lat = (float) $node->field_map_center[LANGUAGE_NONE][0]['lat'];
+    $lon = (float) $node->field_map_center[LANGUAGE_NONE][0]['lng'];
+  }
+  else if (isset($node->field_location[LANGUAGE_NONE][0])) {
+    $lat = (float) $node->field_location[LANGUAGE_NONE][0]['lat'];
+    $lon = (float) $node->field_location[LANGUAGE_NONE][0]['lng'];
+  }
+  else {
+    return array();
+  }
+  return array(
+    'center' => array(
+      'lat' => $lat,
+      'lon' => $lon,
+    ),
+    'zoom'   => $node->field_map_zoom_level[LANGUAGE_NONE][0]['value'],
+    'nid'    => $node->nid,
+    'type'   => $node->type,
+  );
+}
+
+function route_get_map($map_settings, $langcode = NULL) {
+  module_load_include('inc', 'route', 'route.pages');
+
+  if (empty($langcode)) {
+    global $language;
+    $langcode = $language->language;
+  }
+
+  $map = array();
+
+  $settings['map']['nid']          = $map_settings['nid'];
+  $settings['map']['type']         = $map_settings['type'];
+  $settings['map']['zoom_message'] = '<strong class="small">' . t('Zoom out to see bus locations.') . '</strong>';
+
+  $settings['map']['location_search'] = FALSE;
+  $settings['map']['start_filtered']  = FALSE;
+
+  if ($map_settings['nid'] == TOURS_STOPS_NID || $map_settings['type'] == 'route') {
+    $settings['map']['start_filtered'] = TRUE;
+  }
+
+  if ($map_settings['nid'] == TOURS_STOPS_NID) {
+    $settings['map']['location_search'] = TRUE;
+    $settings['map']['search_distance'] = variable_get('route_nearest_point_distance', 10000);
+    drupal_add_js(drupal_get_path('module', 'route') . '/js/leaflet-knn.min.js');
+  }
+
+  $settings['map']['location_icon']       = '/' . drupal_get_path('module', 'route') . '/img/ico-location.png';
+  $settings['map']['closest_stop_string'] = t('Closest Stop');
+
+  if (variable_get('route_help_page_id', '')) {
+    $settings['map']['help_link'] = url('node/' . variable_get('route_help_page_id', ''), array('absolute' => TRUE));
+  }
+  else {
+    $settings['map']['help_link'] = url('node/' . TOURS_STOPS_NID, array(
+      'absolute' => TRUE,
+      'query'    => array('mc' => 1)
+    ));
+  }
+
+  $routes = node_view_multiple(route_get_routes(), 'map');
+  foreach ($routes['nodes'] as $nid => $route) {
+    if (isset($route['field_geojson'])) {
+      $settings['map']['route_links'][$nid] = url('node/' . $nid);
+
+      if ($map_settings['nid'] == $nid) {
+        $settings['map']['current_route'] = 'route-' . $nid;
+      }
+      $title = t('Show @title', array('@title' => $route['#node']->title));
+
+      if (empty($map)) {
+        $map                                                               = $route['field_geojson'];
+        $map[0]['#attached']['js'][0]['data']['leaflet'][0]['features'][0] = array(
+          'group'    => 'route-' . $nid,
+          'label'    => $title,
+          'features' => array(0 => $route['field_geojson'][0]['#attached']['js'][0]['data']['leaflet'][0]['features'][0]),
+        );
+      }
+      else {
+        $map[0]['#attached']['js'][0]['data']['leaflet'][0]['features'][] = array(
+          'group'    => 'route-' . $nid,
+          'label'    => $title,
+          'features' => array(0 => $route['field_geojson'][0]['#attached']['js'][0]['data']['leaflet'][0]['features'][0]),
+        );
+      }
+    }
+  }
+
+  $points_types = route_get_points();
+  foreach ($points_types as $type => $points) {
+    $feature_group = array(
+      'group' => $type,
+      'label' => route_group_type_get_label($type)
+    );
+    foreach ($points as $nid => $point) {
+      $no_image                    = !isset($point->field_map_icon[LANGUAGE_NONE][0]);
+      $lat                         = isset($point->field_location[LANGUAGE_NONE][0]['lat']) ? $point->field_location[LANGUAGE_NONE][0]['lat'] : $point->field_map_center[LANGUAGE_NONE][0]['lat'];
+      $lon                         = isset($point->field_location[LANGUAGE_NONE][0]['lng']) ? $point->field_location[LANGUAGE_NONE][0]['lng'] : $point->field_map_center[LANGUAGE_NONE][0]['lng'];
+      $popup                       = node_view($point, 'popup');
+      $feature_group['features'][] = array(
+        'type'  => 'point',
+        'lat'   => $lat,
+        'lon'   => $lon,
+        'popup' => render($popup),
+        'icon'  => array(
+          'iconUrl'     => route_point_get_icon_url($point, '', $langcode),
+          'iconSize'    => route_point_get_icon_size($point, $no_image, $map_settings['zoom']),
+          'iconAnchor'  => route_point_get_icon_anchor($point, $no_image, $map_settings['zoom']),
+          'popupAnchor' => route_point_get_icon_popup_anchor($point, $no_image, $map_settings['zoom']),
+        ),
+      );
+    }
+
+    $map[0]['#attached']['js'][0]['data']['leaflet'][0]['features'][] = $feature_group;
+  }
+
+  $buses_feature_group = array(
+    'group' => 'buses',
+    'label' => 'Show Buses',
+  );
+  $buses               = route_get_bus_locations(FALSE, $map_settings['zoom']);
+  if ($buses) {
+    foreach ($buses as $bus) {
+      $buses_feature_group['features'][] = array(
+        'type'      => 'point',
+        'lat'       => $bus['lat'],
+        'lon'       => $bus['lon'],
+        'icon'      => $bus['icon'],
+        'clickable' => FALSE,
+      );
+    }
+    $map[0]['#attached']['js'][0]['data']['leaflet'][0]['features'][] = $buses_feature_group;
+  }
+
+  $map[0]['#attached']['js'][0]['data']['leaflet'][0]['map']['settings']['tap']          = FALSE;
+  $map[0]['#attached']['js'][0]['data']['leaflet'][0]['map']['settings']['tapTolerance'] = 100;
+
+  if (isset($map_settings['center'])) {
+    $map[0]['#attached']['js'][0]['data']['leaflet'][0]['map']['center'] = $map_settings['center'];
+  }
+
+  if (isset($map_settings['zoom'])) {
+    $map[0]['#attached']['js'][0]['data']['leaflet'][0]['map']['settings']['zoom'] = $map_settings['zoom'];
+  }
+
+  if (isset($map[0]['#attached']['js'][0]['data']['leaflet'][0]['map']['layers']['terrain'])) {
+    unset($map[0]['#attached']['js'][0]['data']['leaflet'][0]['map']['layers']['terrain']);
+  }
+
+  if (module_exists('mobile_detect')) {
+    if (mobile_detect_get_object()->isMobile()) {
+      $map[0]['#attached']['js'][0]['data']['leaflet'][0]['map']['settings']['zoomControl'] = FALSE;
+      if ($map_settings['type'] == 'bus_stop') {
+        $settings['map']['start_filtered'] = TRUE;
+      }
+    }
+    else {
+      $map[0]['#attached']['js'][0]['data']['leaflet'][0]['map']['settings']['scrollWheelZoom'] = FALSE;
+    }
+  }
+
+  $settings['map']['override_zoom'] = FALSE;
+  if (isset($_GET['wmb'])) {
+    $settings['map']['override_zoom'] = TRUE;
+  }
+
+  $map[0]['#attached']['js'][0]['data']['leaflet'][0]['map']['settings']['layerControlOptions'] = array(
+    'collapsed' => TRUE,
+    'position'  => 'topleft',
+  );
+
+  $point_search_form = drupal_get_form('route_point_search_form');
+  $map[0]['#value'] = render($point_search_form);
+
+  drupal_add_js(drupal_get_path('module', 'route') . '/js/map.js');
+  drupal_add_js($settings, 'setting');
+
+  return $map;
+}
+
+function route_point_search_form($form, &$form_state) {
+  $form['search'] = array(
+    '#type'              => 'textfield',
+    '#title'             => t('Search Points of Interest'),
+    '#autocomplete_path' => 'poi/autocomplete',
+    '#title_display'     => 'none',
+  );
+
+  return $form;
+}
+
+function route_get_points() {
+  $types  = route_valid_point_types();
+  $points = array();
+  $result = db_select('node', 'n')
+    ->fields('n', array('nid', 'title'))
+    ->condition('type', $types, 'IN')
+    ->orderBy('type', 'DESC')
+    ->execute()
+    ->fetchAllKeyed();
+  foreach ($result as $nid => $title) {
+    $node = node_load($nid);
+    if (isset($node->field_location[LANGUAGE_NONE][0]) || isset($node->field_map_center[LANGUAGE_NONE][0])) {
+      $points[$node->type][$nid] = $node;
+    }
+  }
+  return $points;
+}
+
+function route_get_routes() {
+  $routes = array();
+
+  $result = db_select('node', 'n')
+    ->fields('n', array('nid'))
+    ->condition('type', 'route')
+    ->condition('status', 1)
+    ->orderBy('title', 'DESC')
+    ->execute();
+  foreach ($result as $row) {
+    $route             = node_load($row->nid);
+    $routes[$row->nid] = $route;
+  }
+
+  return $routes;
+}
+
+function route_group_type_get_label($type) {
+  switch ($type) {
+    case 'bus_stop':
+      $label = t('Show Stops');
+      break;
+    case 'poi':
+      $label = t('Show Points of Interest');
+      break;
+    default:
+      $label = '';
+      break;
+  }
+
+  return $label;
+}
+
+function route_type_is_map_valid($type) {
+  return in_array($type, route_valid_map_node_types());
+}
+
+function route_valid_map_node_types() {
+  return array(
+    'bus_stop',
+    'poi',
+    'neighborhood',
+    'route',
+    'route_landing',
+  );
+}
+
+function route_is_point($type) {
+  return in_array($type, route_valid_point_types());
+}
+
+function route_valid_point_types() {
+  return array(
+    'bus_stop',
+    'poi',
+    'neighborhood',
+    'route',
+  );
+}
+
+function route_is_valid_bus_locations($type) {
+  return in_array($type, route_valid_bus_locations());
+}
+
+function route_valid_bus_locations() {
+  return array(
+    'bus_stop',
+    'poi',
+  );
+}
+
+function route_get_color($nid) {
+  $route = node_load($nid);
+  return $route->field_background_color[LANGUAGE_NONE][0]['value'];
+}
+
+function route_point_get_icon_url($point, $style = '', $langcode = NULL) {
+  if (empty($langcode)) {
+    global $language;
+    $langcode = $language->language;
+  }
+
+  if (!isset($point->field_map_icon[LANGUAGE_NONE][0])) {
+    return '/' . drupal_get_path('module', 'route') . '/img/spacer.gif';
+  }
+
+  if (isset($point->field_routes[$langcode][0]['target_id'])) {
+    $color = route_get_color($point->field_routes[$langcode][0]['target_id']);
+  }
+  else {
+    $color = route_get_color($point->field_routes['en'][0]['target_id']);
+  }
+
+  foreach ($point->field_map_icon[LANGUAGE_NONE] as $icon) {
+    if (stripos($icon['filename'], $color) !== FALSE) {
+      if (empty($style)) {
+        $style = $point->type;
+      }
+      return image_style_url($style, $icon['uri']);
+    }
+  }
+
+  if (isset($point->field_map_icon[LANGUAGE_NONE][0])) {
+    if (empty($style)) {
+      $style = $point->type;
+    }
+    return image_style_url($style, $point->field_map_icon[LANGUAGE_NONE][0]['uri']);
+  }
+}
+
+function route_point_get_icon_size($point, $none = FALSE, $zoom = 15) {
+  if ($none) {
+    return array('x' => 10, 'y' => 10);
+  }
+  switch ($point->type) {
+    case 'poi':
+      if ($zoom > 13) {
+        return array('x' => 25, 'y' => 46);
+      }
+      else {
+        return array('x' => 13, 'y' => 23);
+      }
+      break;
+    case 'bus_stop':
+      if ($zoom > 13) {
+        return array('x' => 25, 'y' => 25);
+      }
+      else {
+        return array('x' => 13, 'y' => 13);
+      }
+      break;
+  }
+}
+
+function route_point_get_icon_anchor($point, $none = FALSE, $zoom = 15) {
+  if ($none) {
+    return array('x' => 5, 'y' => 5);
+  }
+  switch ($point->type) {
+    case 'poi':
+      if ($zoom > 13) {
+        return array('x' => 13, 'y' => 45);
+      }
+      else {
+        return array('x' => 6, 'y' => 22);
+      }
+      break;
+    case 'bus_stop':
+      if ($zoom > 13) {
+        return array('x' => 13, 'y' => 24);
+      }
+      else {
+        return array('x' => 6, 'y' => 12);
+      }
+      break;
+  }
+}
+
+function route_point_get_icon_popup_anchor($point, $none = FALSE, $zoom = 15) {
+  if ($none) {
+    return array('x' => 0, 'y' => -10);
+  }
+  switch ($point->type) {
+    case 'poi':
+      if ($zoom > 13) {
+        return array('x' => 0, 'y' => -47);
+      }
+      else {
+        return array('x' => 0, 'y' => -23);
+      }
+      break;
+    case 'bus_stop':
+      if ($zoom > 13) {
+        return array('x' => 0, 'y' => -27);
+      }
+      else {
+        return array('x' => 0, 'y' => -13);
+      }
+      break;
+  }
+}
+
+function route_set_bus_stop_poi($poi, $langcode = NULL) {
+  if (empty($langcode)) {
+    global $language;
+    $langcode = $language->language;
+  }
+
+  foreach ($poi->field_bus_stops[$langcode] as $bus_stop) {
+    $bus_stop = node_load($bus_stop['target_id']);
+
+    $poi_in_list = FALSE;
+    if (isset($bus_stop->field_poi[$langcode])) {
+      foreach ($bus_stop->field_poi[$langcode] as $bs_poi) {
+        if ($bs_poi['target_id'] == $poi->nid) {
+          $poi_in_list = TRUE;
+          break;
+        }
+      }
+    }
+
+    if (!$poi_in_list) {
+      $bus_stop->field_poi[$langcode][]['target_id'] = $poi->nid;
+      node_save($bus_stop);
+    }
+
+  }
+}
+
+function _route_get_line_type($node) {
+  $line_type = field_get_items('node', $node, 'field_line_type');
+  if ($line_type) {
+    return $line_type[0]['value'];
+  }
+
+  return 'solid';
+}
+
+function _route_test_set_bus_locations(){
+  $xml_string = 'data=<?xml version="1.0"?><GpsWaypointsSend><SiteID>a06031</SiteID><Waypoint>OTNY-114,024512051812,04/11/2016 19:35:58,40.78112,-73.97239,1,0,0,NE,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-115,024512051544,04/11/2016 19:35:36,40.73071,-73.99276,1,0,0,SE,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-109,024512052241,04/11/2016 19:35:32,40.71844,-74.00282,1,0,0,SW,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-102,024512051809,04/11/2016 19:35:29,40.75986,-73.98434,1,0,0,E,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-107,024512051803,04/11/2016 19:35:26,40.77286,-73.9669,1,0,19,SW,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-123,024512054233,04/11/2016 19:35:25,40.82625,-74.05687,1,0,28,NE,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-117,024512053423,04/11/2016 19:35:17,40.7598,-74.00278,1,0,0,NE,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-112,024512051821,04/11/2016 19:35:17,40.76556,-73.9802,1,0,0,S,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-111,024512051758,04/11/2016 19:35:12,40.75474,-73.9883,1,0,16,SW,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-110,024512051643,04/11/2016 19:35:11,40.72416,-74.0113,1,0,0,N,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-106,024512052226,04/11/2016 19:35:10,40.76197,-73.9835,1,0,0,W,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-122,024512054245,04/11/2016 19:35:07,40.76508,-73.98039,1,0,0,N,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-101,024512051805,04/11/2016 19:35:03,40.70497,-74.01597,1,0,0,W,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-121,024512054232,04/11/2016 19:34:59,40.69636,-73.99054,1,0,0,W,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-119,024512054243,04/11/2016 19:20:11,40.83406,-74.05734,0,0,0,S,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-118,024512052117,04/11/2016 19:01:22,40.83406,-74.05732,0,0,0,N,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-124,024512054249,04/11/2016 18:54:04,40.76554,-73.98037,0,0,0,SW,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-103,024512051766,04/11/2016 18:47:05,40.83431,-74.05658,0,0,0,N,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-125,024512054240,04/11/2016 10:23:51,40.83398,-74.05629,0,0,0,S,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-116,024512053408,04/10/2016 23:46:00,40.83402,-74.05668,1,0,0,N,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-120,024512054227,04/03/2016 18:51:31,40.834,-74.05639,1,0,0,SE,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-126,024512053270,03/26/2016 3:56:56,40.83385,-74.05635,0,0,0,N,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-127,024512053989,03/26/2016 3:36:43,40.83387,-74.05625,0,0,0,SW,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-105,024512051814,03/15/2016 12:42:40,40.76154,-73.98671,0,0,0,N,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-113,024512051808,03/10/2016 17:49:27,40.83435,-74.05699,0,0,0,N,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-104,024512051828,03/10/2016 0:36:55,40.83399,-74.05676,1,0,5,W,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>OTNY-108,024512051807,04/13/2015 2:23:09,40.83406,-74.05709,0,0,0,W,,0,0,0,0,0,0,0,0,0,0</Waypoint><Waypoint>TOP TOUR TEST,024512051151,06/04/2014 20:35:48,40.83443,-74.05726,1,0,0,NW,,0,0,0,0,0,0,0,0,0,0</Waypoint></GpsWaypointsSend>';
+
+  $options = array(
+    'method' => 'POST',
+    'data' => $xml_string,
+    'headers' => array('Content-Type' => 'application/x-www-form-urlencoded'),
+  );
+  $response = drupal_http_request('https://jesseopenloop.dev.avatarnewyork.com/request/bus-locations',$options);
+
+  return $response;
+}

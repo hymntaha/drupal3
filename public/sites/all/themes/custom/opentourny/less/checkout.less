@@ -1,0 +1,380 @@
+.no-checkout{
+	.page-checkout &{
+		display:none !important;
+	}
+}
+
+.page-order{
+  .no-checkout,
+  .breadcrumb,
+  .page-header,
+  .navbar-nav{
+    display: none !important;
+  }
+
+  .main-container{
+    padding-top:50px;
+  }
+
+  @media(max-width:@screen-xs-max){
+    .navbar-toggle-wrapper{
+      display:none !important;
+    }
+  }
+}
+
+.cart-checkout-header{
+  margin-bottom:10px;
+  .header-text{
+    .row > div{
+      text-align:center;
+    }
+
+    .checkout-step{
+      font-size:30px;
+      text-transform: uppercase;
+
+      @media(max-width: @screen-sm-max){
+        font-size:24px;
+      }
+
+      @media(max-width: @screen-xs-max){
+        .h4;
+      }
+    }
+
+    .current-step{
+      font-weight: bold;
+    }
+
+    ol{
+      padding-left:15px;
+    }
+  }
+
+  @media (max-width: @screen-xs-max) {
+    .header-text{
+      padding-left:15px;
+    }
+  }
+}
+
+.cart-checkout{
+  padding-top:20px;
+  padding-bottom:20px;
+  background-color: @table-bg-accent;
+
+  .cart-checkout-form{
+    form > div > .form-group,
+    .container-inline-date{
+      .make-row();
+    }
+
+    label{
+      .make-sm-column(6);
+    }
+
+    .container-inline-date .ui-datepicker-trigger{
+      right:15px;
+    }
+
+    div[id^="edit-city"]{
+      div{
+        font-weight:bold;
+        text-transform: uppercase;
+      }
+    }
+
+    .form-item-display-tour select{
+      .otny-color-red;
+    }
+
+    div[id^="edit-total"]{
+      .h4;
+    }
+
+    .button-wrapper{
+      .make-sm-column(6);
+
+      .btn{
+        text-align: left;
+        .otny-bg-red;
+        .otny-color-white;
+        span{
+          position: absolute;
+          top:8px;
+          right:30px;
+        }
+      }
+
+      @media(max-width:@screen-sm-max){
+        margin-top:10px;
+      }
+    }
+  }
+
+  .package-ticket-table{
+    background-color: transparent;
+    margin-right:-15px;
+
+    tbody{
+      .otny-bg-white;
+    }
+
+    .buy-tickets-copy{
+      padding-left:0;
+    }
+
+    .table > thead > tr > th,
+    .table > tbody > tr > td{
+      &:first-child{
+        padding-left:5px;
+      }
+    }
+  }
+}
+
+form[id^="cart-step-2-form"]{
+  .table{
+    thead > tr > th{
+      border-bottom:1px solid @otny_checkout_border;
+      text-transform: uppercase;
+    }
+    tbody > tr{
+      > td{
+        font-weight:bold;
+        text-transform: uppercase;
+        padding:5px 0;
+
+        &.extra-info{
+          font-weight:normal;
+          text-transform: none;
+        }
+
+        a{
+          font-size:12px;
+        }
+      }
+      &.cart-row{
+        > td{
+          padding-bottom:20px;
+        }
+
+        &:first-child{
+          td{
+            padding-top:20px;
+          }
+        }
+      }
+
+      &.total-row{
+        td{
+          border-top:1px solid @otny_checkout_border;
+          border-bottom:1px solid @otny_checkout_border;
+          padding:10px 0;
+
+          span{
+            font-weight:bold;
+          }
+        }
+      }
+    }
+
+    @media(max-width: @screen-xs-max){
+      .tour,
+      .date{
+        display:none;
+      }
+
+      th,
+      td{
+        width:20%;
+        padding-right:15px;
+        white-space: normal;
+      }
+
+      tr{
+        &.date-row{
+          td{
+            padding-bottom:20px;
+          }
+        }
+        &.total-row{
+          td{
+            width:100%;
+            text-align: center;
+          }
+        }
+      }
+    }
+  }
+
+  .form-item-first-name,
+  .form-item-last-name,
+  .form-item-email,
+  .form-item-confirm-email,
+  .form-item-coupon,
+  .form-item-payment-method,
+  .form-item-billing-name,
+  .form-item-card-number,
+  .form-item-cvv,
+  .form-item-postal-code{
+    .make-row();
+
+    label{
+      .make-sm-column(3);
+    }
+  }
+
+  .form-item-coupon{
+    label{
+      .make-sm-column(5);
+    }
+  }
+
+  .form-item-expiration-date-month{
+    label{
+      .make-sm-column(3);
+
+      @media(max-width:@screen-xs-max){
+        width:100%;
+      }
+    }
+  }
+
+  .form-group{
+    > .form-group{
+      margin-bottom: 0;
+    }
+  }
+
+  .payment-details-row{
+    margin-bottom:10px;
+  }
+
+  .order-total{
+    .make-xs-column(12);
+    padding-top:10px;
+    padding-bottom:10px;
+    background-color:#000;
+    color:@otny_white;
+    text-align: right;
+    text-transform: uppercase;
+    font-weight:bold;
+  }
+
+  .form-type-checkbox{
+    clear:both;
+    .make-sm-column(5);
+
+    @media(min-width:@screen-sm-min){
+      .pull-right;
+    }
+
+    label{
+      font-size:14px;
+      font-weight:bold;
+    }
+
+    input{
+      margin-left:-12px;
+    }
+  }
+
+  .button-wrapper{
+    .clearfix;
+    clear:both;
+
+    .btn{
+      .otny-bg-red;
+      .otny-color-white;
+      .make-sm-column(5);
+      .pull-right;
+    }
+  }
+
+  .coupon-wrapper{
+    margin:15px 0;
+    border-top:1px solid @otny_checkout_border;
+    padding-top:15px;
+    border-bottom:1px solid @otny_checkout_border;
+
+    .coupon-field{
+      padding:0;
+    }
+
+    .coupon-submit-field{
+      padding-right:0;
+
+      @media(max-width:@screen-xs-max){
+        padding:0;
+        margin-bottom: 15px;
+      }
+    }
+
+    .button-wrapper{
+      .otny-color-link-white;
+      .btn{
+        .otny-bg-blue;
+        .make-sm-column(12);
+        border-color: @otny_blue;
+      }
+    }
+  }
+}
+
+.blockMsg{
+  padding:0;
+  margin:0;
+  width: 30%;
+  top: 40%;
+  left:  35%;
+  text-align:center;
+  color: #000;
+  border:3px solid #aaa;
+  background-color:@otny_white;
+  cursor:wait;
+
+  @media(max-width:@screen-xs-max){
+    top:20%;
+    left:0;
+    width:52%;
+  }
+}
+
+.block-ui{
+  .h4;
+  display:block;
+  padding:15px;
+  font-size:22px;
+  font-weight:bold;
+}
+
+#paypal-button,
+#paypal-cancel{
+  display:block;
+  cursor: pointer;
+}
+
+#paypal-button{
+  background-image:url('../images/btn-paypal.png');
+  background-repeat:no-repeat;
+  width:131px;
+  height:45px;
+  margin:15px auto;
+  display:block;
+  text-indent:-9999px;
+}
+
+#paypal-cancel{
+  margin:5px auto;
+}
+
+#paypal-loading{
+  background-image:url('../images/ajax-loader.gif');
+  background-repeat:no-repeat;
+  width:32px;
+  height:32px;
+  margin:0 auto 10px auto;
+  display:none;
+}

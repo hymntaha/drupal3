@@ -1,0 +1,164 @@
+#block-hudson-buy-tickets{
+	.make-row();
+
+	@media (max-width: @screen-xs-max){
+		border:1px solid @otny_border;
+	}
+
+	.block-title{
+		color:@otny_red;
+		line-height:54px;
+		font-weight:900;
+		margin-bottom:0;
+		white-space:nowrap;
+		.make-sm-column(2);
+	}
+	form[id^="hudson-buy-tickets-form"]{
+		.make-sm-column(10);
+		> div{
+			.make-row();
+		}
+
+		.form-group,
+		.button-wrapper{
+			margin:12px 0;
+		}
+
+		.form-item-servicenum{
+			.make-sm-column(3);
+			.make-md-column(5);
+		}
+
+		.form-item-passengers,
+		.form-item-apassengers{
+			.make-sm-column(3);
+			.make-md-column(2);
+		}
+
+		.button-wrapper{
+			.make-sm-column(3);
+		}
+	}
+}
+
+.hudson-ticket-info-container{
+	position: absolute;
+	top:15px;
+	left:20%;
+	z-index:100;
+	max-width:323px;
+
+	> .container{
+		padding:0;
+	}
+}
+
+#block-hudson-buy-tickets-info,
+#block-hudson-buy-tickets-info-no-form,
+.package-ticket-table{
+	background-color:#fff;
+	padding:22px 0 0 0;
+
+	.block-title{
+		.otny-color-red;
+		text-transform:uppercase;
+		margin-bottom:20px;
+		padding:0 25px;
+	}
+
+	form[id^="hudson-buy-tickets-form"]{
+		padding:0 25px 8px 25px;
+
+		> div{
+			.make-row();
+		}
+		.form-item-servicenum{
+			.make-sm-column(12);
+		}
+
+		.form-item-passengers,
+		.form-item-apassengers{
+			.make-sm-column(6);
+		}
+
+		.button-wrapper{
+			.make-sm-column(12);
+		}
+
+		.form-group{
+			margin-bottom:10px;
+		}
+
+		.form-submit{
+			text-transform:uppercase;
+			font-size:20px;
+
+			span{
+				font-size:16px;
+			}
+		}
+	}
+
+	.buy-tickets-copy{
+		padding:0 24px 11px 24px;
+
+		h4{
+			margin-bottom:0;
+			text-transform:uppercase;
+		}
+
+		p{
+			font-size:14px;
+			font-weight:600;
+		}
+	}
+
+	.table > thead > tr > th{
+		font-size:14px;
+		line-height:18px;
+		font-weight:900;
+		padding-right:5px;
+		padding-top:8px;
+		padding-bottom:8px;
+        min-width:77px;
+
+		&:first-child{
+			padding-left:24px;
+			padding-right:0;
+		}
+
+		span{
+			font-weight:normal;
+			font-size:11px;
+
+			@media (max-width: @screen-sm-max){
+				display:block;
+				line-height:10px;
+			}
+		}
+	}
+
+	.table > tbody > tr > td{
+		font-size:14px;
+		line-height:25px;
+		font-weight:600;
+		padding-right:5px;
+
+		&:first-child{
+			padding-left:24px;
+		}
+
+		.online-price{
+			font-size:22px;
+			color:@otny_blue;
+		}
+		.regular-price{
+			font-size:14px;
+			text-decoration:line-through;
+		}
+	}
+}
+
+#block-hudson-buy-tickets-info-no-form{
+	border:1px solid @otny_border;
+}

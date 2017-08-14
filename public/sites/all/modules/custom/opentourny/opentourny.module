@@ -1,0 +1,318 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function opentourny_menu() {
+  $items['admin/opentourny'] = array(
+    'title' => 'OpenTourNY Settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('opentourny_admin_settings_form'),
+    'access arguments' => array('access opentourny settings'),
+    'file' => 'opentourny.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function opentourny_permission() {
+  return array(
+    'access opentourny settings' =>  array(
+      'title' => t('Access OpenTourNY Admin Settings'),
+      'description' => t(''),
+    ),
+  );
+}
+
+function opentourny_get_color_options(){
+	return array(
+    'white' => 'White',
+    'grey' => 'Grey',
+    'blue' => 'Blue',
+    'gold' => 'Gold',
+		'silver' => 'Silver',
+		'red' => 'Red',
+    'black' => 'Black',
+	);
+}
+
+/**
+ * Implements hook_admin_paths().
+ */
+function opentourny_admin_paths() {
+  $paths = array(
+    'slideshow/slideshow/*/delete' => TRUE,
+    'slideshow/slideshow/*/edit' => TRUE,
+    'content_container/content_container/*/delete' => TRUE,
+    'content_container/content_container/*/edit' => TRUE,
+  );
+  return $paths;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function opentourny_theme($existing, $type, $theme, $path) {
+  return array(
+    'call_now' => array(
+      'variables' => array(
+        'phone_number_large' => variable_get('phone_number', '855–OPEN TOUR'),
+        'phone_number_small' => variable_get('phone_number_small','673-6868'),
+        'phone_number_mobile' => variable_get('phone_number_mobile','855-673-6868')
+      ),
+    ),
+    'feedback' => array(
+      'variables' => array(
+        'feedback_link' => variable_get('header_feedback_link', ''),
+      ),
+    ),
+    'add_this' => array(
+      'variables' => array(
+        'enabled' => TRUE,
+      ),
+    ),
+    'facebook_pixel' => array(
+      'variables' => array(
+        'enabled' => TRUE,
+        'start_checkout' => FALSE,
+        'start_payment' => FALSE,
+        'order_total' => '',
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function opentourny_block_info() {
+  $blocks = array();
+  
+  $ccs = entity_load('content_container');
+  foreach($ccs as $cc){
+    $blocks['block_cc_'.$cc->id] = array(
+      'info' => 'CC - '.$cc->title,
+      'cache' => DRUPAL_NO_CACHE
+    );
+  }
+
+  $slideshows = entity_load('slideshow');
+  foreach($slideshows as $ss){
+    $blocks['block_ss_'.$ss->id] = array(
+      'info' => 'SS - '.$ss->title,
+      'cache' => DRUPAL_NO_CACHE
+    );
+  }
+
+  $blocks['call_now'] = array(
+    'info' => 'Call Now',
+  );
+
+  $blocks['feedback'] = array(
+    'info' => 'Feedback',
+  );
+
+  $blocks['addthis'] = array(
+    'info' => 'AddThis',
+  );
+
+  $blocks['full_screen_content'] = array(
+    'info' => 'Full Screen Content',
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function opentourny_block_view($delta = '') {
+  $block = array();
+
+  if(strpos($delta, 'block_cc_') === 0){
+    $entity_id = explode('_',$delta);
+    $entity_id = $entity_id[2];
+    
+    $cc = entity_load_single('content_container',$entity_id);
+
+    if($cc !== FALSE){
+      $block['subject'] = $cc->title;
+      $block['content'] = entity_view('content_container',array($cc));
+    }
+  }
+
+  if(strpos($delta, 'block_ss_') === 0){
+    $entity_id = explode('_',$delta);
+    $entity_id = $entity_id[2];
+    
+    $slideshow = entity_load_single('slideshow',$entity_id);
+
+    if($slideshow !== FALSE){
+      $block['subject'] = $slideshow->title;
+      $block['content'] = entity_view('slideshow',array($slideshow));
+    }
+  }
+
+  if($delta == 'call_now'){
+    $block['subject'] = 'Call Now';
+    $block['content'] = array('#theme' => 'call_now');
+  }
+
+  if($delta == 'feedback'){
+    $block['subject'] = '';
+    $block['content'] = array('#theme' => 'feedback');
+  }
+
+  if($delta == 'addthis'){
+    $block['subject'] = '';
+    $block['content'] = array('#theme' => 'add_this');
+  }
+
+  if($delta == 'full_screen_content'){
+    $block['subject'] = '';
+    $block['content'] = '';
+
+    if($node = menu_get_object()){
+      $view = node_view($node, 'full_screen_content');
+
+      $mobile = FALSE;
+      if(module_exists('mobile_detect')){
+        $mobile = mobile_detect_get_object()->isMobile();
+      }
+
+      if(isset($view['field_video']) && !$mobile){
+        $block['content'] = $view;
+      }
+    }
+  }
+
+  return $block;
+}
+
+/**
+ * Implements hook_block_configure().
+ */
+function opentourny_block_configure($delta = '') {
+  $form = array();
+  if ($delta == 'feedback') {
+    $form['header_feedback_link'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Feedback Link'),
+      '#default_value' => variable_get('header_feedback_link', ''),
+    );
+  }
+  return $form;
+}
+
+/**
+ * Implements hook_block_save($delta = '', $edit = array().
+ */
+function opentourny_block_save($delta = '', $edit = array()) {
+  if($delta == 'feedback'){
+    variable_set('header_feedback_link', $edit['header_feedback_link']);
+  }
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ */
+function opentourny_entity_info_alter(&$entity_info) {
+  $entity_info['node']['view modes']['bottom_content'] = array(
+    'label' => t('Bottom Content'),
+    'custom settings' => TRUE,
+  );
+  $entity_info['node']['view modes']['full_screen_content'] = array(
+    'label' => t('Full Screen Content'),
+    'custom settings' => TRUE,
+  );
+}
+
+function opentourny_get_hex_color($color){
+  $colors = opentourny_get_colors();
+  if(!empty($colors[$color])){
+    return $colors[$color];
+  }
+  else{
+    return FALSE;
+  }
+}
+
+function opentourny_get_colors(){
+  return array(
+    'white' => 'FFFFFF',
+    'grey' => 'F0F0F0',
+    'blue' => '000066',
+    'gold' => '8C7100',
+    'silver' => '999999',
+    'red' => 'FF0000',
+    'black' => '000000',
+  );  
+}
+
+function opentourny_is_local() {
+  return stristr($_SERVER['HTTP_HOST'], 'avatarnewyork.com') ? true : false;
+}
+
+/**
+ * Implements hook_cron().
+ */
+function opentourny_cron() {
+  if(module_exists('cloud_files')){
+    cache_clear_all('rackspace_cloud_credentials', 'cache');
+  }
+}
+
+function theme_call_now($variables){
+  $output = t('Call Now').': <span class="phone-number">'.$variables['phone_number_large'].'</span>';
+  $output .= '<span class="phone-number-small">('.$variables['phone_number_small'].')</span>';
+  return $output;
+}
+
+function theme_feedback($variables){
+  $output = $variables['feedback_link'];
+  return $output;
+}
+
+function theme_add_this($variables){
+  $output = '';
+  if($variables['enabled']){
+    $output .= '<div class="addthis_native_toolbox"></div>';
+    $output .= '<script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js#pubid=ra-553fcfdc2e71afb5" async="async"></script>';
+ }
+ return $output;
+}
+
+function theme_facebook_pixel($variables){
+   $output = '';
+   if($variables['enabled']){
+
+         $output .= "
+         !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+         n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+         n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+         t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+         document,'script','https://connect.facebook.net/en_US/fbevents.js');";
+
+         $output .= "fbq('init', '1186223921390117');
+                     fbq('track', 'PageView');";
+
+     if($variables['start_checkout']){
+       $output .= "fbq('track', 'InitiateCheckout');";
+     }
+
+     if($variables['start_payment']){
+       $output .= "fbq('track', 'AddPaymentInfo');";
+     }
+
+     if($variables['order_total']){
+       $output .= "fbq('track', 'Purchase', {value: '".$variables['order_total']."', currency: 'USD'});";
+     }
+
+         $output = "<script>" . $output . "</script>";
+         $output .= '<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1186223921390117&ev=PageView&noscript=1"/></noscript>';
+   }
+   return $output;
+}

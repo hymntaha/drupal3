@@ -1,0 +1,442 @@
+<?php
+
+define('MAX_ADULT_TICKETS', 10);
+define('MAX_CHILD_TICKETS', 10);
+
+/**
+ * Implements hook_init().
+ */
+function hudson_init() {
+  if (isset($_GET['haid']) && !empty($_GET['haid'])) {
+    hudson_set_affiliate_id($_GET['haid']);
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function hudson_menu() {
+  $items['admin/opentourny/hudson'] = array(
+    'title'            => 'Hudson Settings',
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array('hudson_admin_settings_form'),
+    'access arguments' => array('access opentourny settings'),
+    'file'             => 'hudson.admin.inc',
+  );
+
+  $items['ajax/bus_locations'] = array(
+    'title'            => 'Bus Locations',
+    'page callback'    => 'hudson_get_bus_locations',
+    'page arguments'   => array(TRUE),
+    'access arguments' => array('access content'),
+    'type'             => MENU_CALLBACK,
+  );
+
+  $items['checkout'] = array(
+    'title'            => 'Checkout',
+    'page callback'    => 'hudson_checkout_page',
+    'access arguments' => array('access content'),
+    'file'             => 'hudson.pages.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function hudson_theme($existing, $type, $theme, $path) {
+  return array(
+    'hudson_iframe' => array(
+      'template'  => 'hudson-iframe',
+      'variables' => array('url' => ''),
+    ),
+  );
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function hudson_block_info() {
+  $blocks['buy_tickets']              = array(
+    'info'  => t('Buy Tickets Header Form'),
+    'cache' => DRUPAL_NO_CACHE
+  );
+  $blocks['buy_tickets_info']         = array(
+    'info'  => t('Buy Tickets Info Table'),
+    'cache' => DRUPAL_NO_CACHE
+  );
+  $blocks['buy_tickets_info_no_form'] = array(
+    'info'  => t('Buy Tickets Info Table No Form'),
+    'cache' => DRUPAL_NO_CACHE
+  );
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function hudson_block_view($delta = '') {
+  $block = array();
+
+  global $language;
+
+  switch ($delta) {
+    case 'buy_tickets':
+      $block['subject'] = t('Buy Tickets');
+      $block['content'] = drupal_get_form('hudson_buy_tickets_form');
+      break;
+    case 'buy_tickets_info':
+      $block['subject'] = t('Buy Tickets');
+      $block['content'] = array(
+        'form'   => drupal_get_form('hudson_buy_tickets_form'),
+        'markup' => array('#markup' => '<div class="buy-tickets-copy">' . variable_get('buy_tickets_text_' . $language->language, '<h4>' . t('Buy Online & Save') . '</h4><p>' . t('Free for children under 2 years of age') . '</p>') . '</div>'),
+        'table'  => hudson_get_ticket_pricing_table(),
+      );
+      break;
+    case 'buy_tickets_info_no_form':
+      $block['subject'] = t('Buy Tickets');
+      $block['content'] = array(
+        'markup' => array('#markup' => '<div class="buy-tickets-copy">' . variable_get('buy_tickets_text_' . $language->language, '<h4>' . t('Buy Online & Save') . '</h4><p>' . t('Free for children under 2 years of age') . '</p>') . '</div>'),
+        'table'  => hudson_get_ticket_pricing_table(),
+      );
+      break;
+  }
+  return $block;
+}
+
+/**
+ * Implements hook_block_view_alter().
+ */
+function hudson_block_view_alter(&$data, $block) {
+  //Hudson Checkout Disabled Message
+  if ($block->module == 'block' && $block->delta == 4) {
+    if (variable_get('hudson_enabled', TRUE)) {
+      $data['content'] = '';
+    }
+  }
+}
+
+/**
+ * Implements hook_block_configure().
+ */
+function hudson_block_configure($delta = '') {
+  $form = array();
+
+  switch ($delta) {
+    case 'buy_tickets_info':
+      foreach (language_list() as $langcode => $language) {
+        $form['buy_tickets_text_' . $langcode] = array(
+          '#type'          => 'text_format',
+          '#title'         => 'Buy Tickets Text (' . $language->name . ')',
+          '#default_value' => variable_get('buy_tickets_text_' . $langcode, '<h4>' . t('Buy Online & Save', array(), array('langcode' => $langcode)) . '</h4><p>' . t('Free for children under 2 years of age', array(), array('langcode' => $langcode)) . '</p>'),
+        );
+      }
+      break;
+  }
+
+  return $form;
+}
+
+/**
+ * Implements hook_block_save().
+ */
+function hudson_block_save($delta = '', $edit = array()) {
+  switch ($delta) {
+    case 'buy_tickets_info':
+      foreach (language_list() as $langcode => $language) {
+        variable_set('buy_tickets_text_' . $langcode, $edit['buy_tickets_text_' . $langcode]['value']);
+      }
+      break;
+  }
+}
+
+function hudson_buy_tickets_form($form, &$form_state, $pickupcity = 1, $package_name = '', $node = FALSE, $default_num_tickets = 2) {
+  if (empty($node)) {
+    if ($page_node = menu_get_object()) {
+      if ($page_node->type == 'package') {
+        $node       = $page_node;
+        $pickupcity = $node->field_hudson_pickupcity[LANGUAGE_NONE][0]['value'];
+      }
+    }
+  }
+
+  $form['servicenum'] = array(
+    '#title'         => t(''),
+    '#type'          => 'select',
+    '#options'       => hudson_get_ticket_options($package_name, $node),
+    '#default_value' => $default_num_tickets,
+  );
+
+  $form['passengers'] = array(
+    '#title'         => t(''),
+    '#type'          => 'select',
+    '#options'       => hudson_get_adult_ticket_options(),
+    '#default_value' => 1,
+  );
+
+  $form['apassengers'] = array(
+    '#title'         => t(''),
+    '#type'          => 'select',
+    '#options'       => hudson_get_child_ticket_options(),
+    '#default_value' => 0,
+  );
+
+  $form['pickupcity'] = array(
+    '#type'  => 'hidden',
+    '#value' => $pickupcity,
+  );
+
+  $form['submit'] = array(
+    '#type'       => 'submit',
+    '#attributes' => array('class' => array('buy-tickets-button')),
+    '#value'      => t('Submit'),
+  );
+
+  return $form;
+}
+
+function hudson_buy_tickets_form_submit($form, &$form_state) {
+  $values = $form_state;
+  form_state_values_clean($values);
+  $iframe_url = hudson_get_iframe_url($values['values']);
+  if ($iframe_url) {
+    $_SESSION['hudson_url'] = $iframe_url;
+    $form_state['redirect'] = 'checkout';
+  }
+  else {
+    drupal_set_message(t('Checkout has not been configured.'), 'warning');
+  }
+}
+
+function hudson_get_iframe_url($options = array()) {
+  global $language;
+
+  $url      = variable_get('hudson_url_' . $language->language, '');
+  $linkname = variable_get('hudson_url_linkname', '');
+
+  if (!empty($url) && !empty($linkname)) {
+    $query['LINKNAME'] = $linkname;
+    foreach ($options as $key => $value) {
+      $key         = strtoupper($key);
+      $query[$key] = $value;
+    }
+    if (isset($_SESSION['haid'])) {
+      $query['GROUPID'] = $_SESSION['haid'];
+    }
+    return url($url, array('query' => $query));
+  }
+
+  return FALSE;
+}
+
+function hudson_load_ticket_terms() {
+  $v            = taxonomy_vocabulary_machine_name_load('tickets');
+  $terms        = taxonomy_get_tree($v->vid);
+  $terms_loaded = array();
+  foreach ($terms as $term) {
+    $terms_loaded[] = taxonomy_term_load($term->tid);
+  }
+  return $terms_loaded;
+}
+
+function hudson_get_ticket_options($package_name, $node = FALSE) {
+  global $language;
+
+  $options  = array();
+  $includes = array();
+
+  if (!empty($node)) {
+    $ticket_days = field_get_items('node', $node, 'field_ticket_days');
+    if (!empty($ticket_days)) {
+      foreach ($ticket_days as $term) {
+        $tid            = $term['tid'];
+        $includes[$tid] = $tid;
+      }
+    }
+  }
+
+  $terms = hudson_load_ticket_terms();
+
+  foreach ($terms as $term) {
+    if (!empty($includes)) {
+      if (!in_array($term->tid, $includes)) {
+        continue;
+      }
+    }
+    $label = isset($term->name_field[$language->language][0]['value']) ? $term->name_field[$language->language][0]['value'] : $term->name_field['en'][0]['value'];
+    if ($package_name) {
+      $name = $package_name;
+      if (strpos($name, ':') !== FALSE) {
+        $name = explode(':', $package_name);
+        $name = trim($name[1]);
+      }
+      $label .= ' ' . $name;
+    }
+
+    if($node && package_is_night_tour($node)){
+      $label = str_ireplace('day','',$label);
+    }
+
+    $options[$term->field_hudson_servicenum[LANGUAGE_NONE][0]['value']] = $label;
+  }
+  return $options;
+}
+
+function hudson_get_adult_ticket_options() {
+  $options = array();
+  for ($i = 1; $i <= MAX_ADULT_TICKETS; $i++) {
+    if ($i < 2) {
+      $options[$i] = $i . ' ' . t('Adult');
+    }
+    else {
+      $options[$i] = $i . ' ' . t('Adults');
+    }
+  }
+
+  return $options;
+}
+
+function hudson_get_child_ticket_options() {
+  $options            = array();
+  $children_age_range = variable_get('hudson_child_age_range', '3-17');
+
+  for ($i = 0; $i <= MAX_CHILD_TICKETS; $i++) {
+    if ($i < 2) {
+      $options[$i] = $i . ' ' . t('Child') . ' (' . $children_age_range . ')';
+    }
+    else {
+      $options[$i] = $i . ' ' . t('Children') . ' (' . $children_age_range . ')';
+    }
+  }
+
+  return $options;
+}
+
+function hudson_get_ticket_pricing_table() {
+  global $language;
+
+  $header = array(
+    t('Ticket Duration'),
+    t('Adults'),
+    t('Children') . ' <span>(' . t('age') . ' ' . variable_get('hudson_child_age_range', '3-17') . ')</span>',
+  );
+
+  $rows = array();
+
+  $terms = hudson_load_ticket_terms();
+  foreach ($terms as $term) {
+
+    $adult_price = '<span class="online-price">$' . $term->field_adult_online_price[LANGUAGE_NONE][0]['value'] . '</span>';
+    if (isset($term->field_adult_regular_price[LANGUAGE_NONE][0]['value']) && ($term->field_adult_online_price[LANGUAGE_NONE][0]['value'] != $term->field_adult_regular_price[LANGUAGE_NONE][0]['value'])) {
+      $adult_price .= ' <span class="regular-price">$' . $term->field_adult_regular_price[LANGUAGE_NONE][0]['value'] . '</span>';
+    }
+
+    $child_price = '<span class="online-price">$' . $term->field_child_online_price[LANGUAGE_NONE][0]['value'] . '</span>';
+    if (isset($term->field_child_regular_price[LANGUAGE_NONE][0]['value']) && ($term->field_child_online_price[LANGUAGE_NONE][0]['value'] != $term->field_child_regular_price[LANGUAGE_NONE][0]['value'])) {
+      $child_price .= ' <span class="regular-price">$' . $term->field_child_regular_price[LANGUAGE_NONE][0]['value'] . '</span>';
+    }
+
+    $rows[] = array(
+      isset($term->name_field[$language->language][0]['value']) ? $term->name_field[$language->language][0]['value'] : $term->name_field['en'][0]['value'],
+      $adult_price,
+      $child_price,
+    );
+  }
+
+  return array(
+    '#theme'  => 'table',
+    '#header' => $header,
+    '#rows'   => $rows,
+    '#sticky' => FALSE,
+  );
+}
+
+function hudson_get_bus_locations($json = FALSE, $zoom = 15) {
+  $hudson_bus_location_url = variable_get('hudson_bus_location_url', '');
+  if (!$hudson_bus_location_url) {
+    return array();
+  }
+
+  $data[] = 'xmlsrc=<?xml version="1.0" encoding="UTF-8"?><WaypointsTripVehicleRequest><SiteID>a06031</SiteID><Filter><TripType>1</TripType></Filter></WaypointsTripVehicleRequest>';
+  $data[] = 'xmlsrc=<?xml version="1.0" encoding="UTF-8"?><WaypointsTripVehicleRequest><SiteID>a06031</SiteID><Filter><TripType>2</TripType></Filter></WaypointsTripVehicleRequest>';
+  if (variable_get('hudson_bus_location_test_mode', TRUE)) {
+    $data[] = 'xmlsrc=<?xml version="1.0" encoding="UTF-8"?><WaypointsTripVehicleRequest><SiteID>a06031</SiteID><Filter><TripType>1</TripType></Filter><TestData>1</TestData></WaypointsTripVehicleRequest>';
+    $data[] = 'xmlsrc=<?xml version="1.0" encoding="UTF-8"?><WaypointsTripVehicleRequest><SiteID>a06031</SiteID><Filter><TripType>2</TripType></Filter><TestData>1</TestData></WaypointsTripVehicleRequest>';
+  }
+
+  $buses = array();
+
+  foreach ($data as $d) {
+    $response = drupal_http_request($hudson_bus_location_url,
+      array(
+        'method' => 'POST',
+        'data'   => $d,
+      )
+    );
+
+    if (isset($response->error)) {
+      watchdog('hudson', 'Hudson Bus Location Query Error: @error', array('@error' => $response->error), WATCHDOG_ERROR);
+      return array();
+    }
+
+    $xml_data = simplexml_load_string($response->data);
+
+    foreach ($xml_data->Trip as $trip) {
+      $buses[] = array(
+        'lat'       => (float) $trip->Latitude,
+        'lon'       => (float) $trip->Longitude,
+        'icon'      => array(
+          'iconUrl'  => '/' . drupal_get_path('theme', 'opentourny') . '/images/ico-bus.png',
+          'iconSize' => $zoom > 13 ? array(
+            'x' => 25,
+            'y' => 67
+          ) : array('x' => 12, 'y' => 33),
+        ),
+        'clickable' => FALSE,
+      );
+    }
+  }
+
+  if ($json) {
+    echo drupal_json_encode($buses);
+    drupal_exit();
+  }
+
+  return $buses;
+}
+
+function hudson_bus_locations_enabled() {
+  return variable_get('hudson_bus_location_enabled', FALSE);
+}
+
+function hudson_get_cheapest_tickets() {
+  $terms = hudson_load_ticket_terms();
+  return array(
+    'adult' => $terms[0]->field_adult_online_price[LANGUAGE_NONE][0]['value'],
+    'child' => $terms[0]->field_child_online_price[LANGUAGE_NONE][0]['value'],
+  );
+}
+
+/**
+ * Implements hook_page_alter().
+ */
+function hudson_page_alter(&$page) {
+  $page['page_bottom']['affiliate_tracking']['#markup'] = '<script type="text/javascript">/*DO NOT ALTER *** New Site*/(function(e){var t="1471",n=document,r,i,s={http:"http://cdn.mplxtms.com/s/MasterTMS.min.js",https:"https://secure-cdn.mplxtms.com/s/MasterTMS.min.js"},o=s[/\w+/.exec(window.location.protocol)[0]];i=n.createElement("script"),i.type="text/javascript",i.async=!0,i.src=o+"#"+t,r=n.getElementsByTagName("script")[0],r.parentNode.insertBefore(i,r),i.readyState?i.onreadystatechange=function(){if(i.readyState==="loaded"||i.readyState==="complete")i.onreadystatechange=null}:i.onload=function(){try{e()}catch(t){}}})(function(){});</script>';
+}
+
+/**
+ * Implements hook_node_view().
+ */
+function hudson_node_view($node, $view_mode, $langcode) {
+  if ($view_mode == 'full') {
+    $affiliate_id = field_get_items('node', $node, 'field_hudson_affiliate_id');
+    if (isset($affiliate_id[0]['value'])) {
+      hudson_set_affiliate_id($affiliate_id[0]['value']);
+    }
+  }
+}
+
+function hudson_set_affiliate_id($id) {
+  $_SESSION['haid'] = $id;
+}

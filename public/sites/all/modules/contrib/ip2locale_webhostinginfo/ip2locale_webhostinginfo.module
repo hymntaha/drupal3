@@ -1,0 +1,183 @@
+<?php
+// $Id$
+
+/**
+ * @file ip2locale_webhostinginfo.module
+ * Data provider for the ip2locale module.
+ */
+
+define('IP2LOCALE_WEBHOSTINGINFO_MAIN_URL', 'http://www.webhosting.info/');
+
+/**
+ * Implements hook_menu().
+ */
+function ip2locale_webhostinginfo_menu() {
+  $items = array();
+  
+  $items['ip2locale_webhostinginfo/ajax'] = array(
+    'page callback' => 'ip2locale_webhostinginfo_ajax_upload',
+    'delivery callback' => 'ajax_deliver',
+    'access arguments' => array('access content'),
+    /*'theme callback' => 'ajax_base_page_theme',*/
+    'type' => MENU_CALLBACK,
+  );
+  $items['ip2locale_webhostinginfo/progress'] = array(
+    'page callback' => 'ip2locale_webhostinginfo_ajax_progress',
+    /*'delivery callback' => 'ajax_deliver',*/
+    'access arguments' => array('access content'),
+    /*'theme callback' => 'ajax_base_page_theme',*/
+    'type' => MENU_CALLBACK,
+  );
+  
+  return $items;
+}
+
+
+/**
+ * Menu callback; Perform a batch update over an AJAX callback.
+ */
+function ip2locale_webhostinginfo_ajax_upload() {
+  include_once DRUPAL_ROOT . '/' . drupal_get_path('module', 'ip2locale_webhostinginfo') . '/ip2locale_webhostinginfo.inc'; 
+  
+  // Prepare the batch job
+  ip2locale_webhostinginfo_batch_prepare();
+  
+  // Force the batch job to run in non-progressive mode. This seems to be the
+  // only way to get it to work from within an ajax callback.
+  ip2locale_webhostinginfo_batch_insert(TRUE);
+  
+  $update_time = variable_get('ip2locale_webhostinginfo_last_update', 0);
+  
+  $message = '<div id="ip2locale-webhostinginfo-ip2locale-update-status" class="messages">';
+  $message .= t('Database last updated on ') . date('n/j/Y', $update_time) . ' at ' . date('H:i:s T', $update_time);
+  $message .= '</div>';
+  
+  $commands = array();
+  $commands[] = ajax_command_replace(NULL, theme('status_messages') . $message);
+   
+  return array('#type' => 'ajax', '#commands' => $commands);
+}
+
+/**
+ * Menu callback; status reporter for the progress bar.
+ */
+function ip2locale_webhostinginfo_ajax_progress() {
+  $progress = array(
+    'message' => t('Starting update...'),
+    'percentage' => 0,
+    'status' => 1,
+  );
+  if (variable_get('ip2locale_webhostinginfo_update_progress_percent', 0)) {
+    $progress['message'] = variable_get('ip2locale_webhostinginfo_update_progress_message', '');
+    $progress['percentage'] = round(100 * variable_get('ip2locale_webhostinginfo_update_progress_percent', 0));
+  }
+  drupal_json_output($progress);
+}
+
+/**
+ * Implement hook_ip2locale_info().
+ */
+function ip2locale_webhostinginfo_ip2locale_info() {
+  $features = array(
+    array(t('ISO2 Country Code'), t('Yes'), t('The ISO3 standard country code (2 letter)')),
+    array(t('ISO3 Country Code'), t('Yes'), t('The ISO2 standard country code (3 letter)')),
+  );
+  return array(
+    '#provider' => 'webhostinginfo',
+    '#name' => t('WebHosting.info'),
+    '#url' => IP2LOCALE_WEBHOSTINGINFO_MAIN_URL,
+    '#settings_title' => 'WebHosting.info',
+    '#settings_description' => t('These settings specifically affect IP lookups using the <a href="@provider" target="_blank">WebHosting.info</a> service.', array('@provider' => IP2LOCALE_WEBHOSTINGINFO_MAIN_URL)),
+    '#supported_features' => $features,
+  );
+}
+
+/**
+ * Implement hook_ip2locale_settings().
+ */
+function ip2locale_webhostinginfo_ip2locale_update() {
+  $form = array();
+
+  $update_time = variable_get('ip2locale_webhostinginfo_last_update', 0);
+  if (empty($update_time)) {
+    $message = t('Database not installed');
+  }
+  else {
+    $message = t('Database last updated on ') . date('n/j/Y', $update_time) . ' at ' . date('H:i:s T', $update_time);
+  }
+
+  $form['update_status_group'] = array(
+    '#title' => t("Database status"),
+    '#type' => 'fieldset',
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+  
+  $form['update_status_group']['update_status'] = array(
+    '#title' => t("Update status"),
+    '#type' => 'item',
+    '#prefix' => '<div id="ip2locale-webhostinginfo-ip2locale-update-status" class="messages">',
+    '#suffix' => '</div>',
+    '#markup' => $message,
+    '#type' => 'markup',
+  );
+
+  $form['update_status_group']['database_source'] = array(
+    '#type'          => 'textfield',
+    '#title'         => t('Database URL source'),
+    '#default_value' => variable_get('database_source', 'http://ip-to-country.webhosting.info/downloads/ip-to-country.csv.zip'),
+    '#description'   => t("Enter the Webhosting.info CSV URL, source for updating the Webhosting.info database"),
+    '#size'          => 120,
+  );
+  
+  $form['update_status_group']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Update database now'),
+    '#prefix' => '<div class="clearfix">',
+    '#suffix' => '</div>',
+    '#submit' => array('ip2locale_webhostinginfo_ip2locale_update_submit'), // If no javascript action.
+    '#ajax' => array(
+      'path' => 'ip2locale_webhostinginfo/ajax/test',
+      'wrapper' => 'ip2locale-webhostinginfo-ip2locale-update-status',
+      'method' => 'replace',
+      'effect' => 'fade',
+      'progress' => array(
+        'type' => 'bar',
+        'message' => t('Please wait...'),
+        'path' => 'ip2locale_webhostinginfo/progress',
+      ),
+    ),
+  );
+  
+  // Form to enable automatic Smart IP database update every one month
+  $form['update_status_group']['database_auto_update'] = array(
+    '#type'          => 'checkbox',
+    '#title'         => t('Automatic database update'),
+    '#description'   => t('Database will be automatically updated via cron.php every one month (Maxmind updates every first day of a month). !cron must be enabled for this to work.', array('!cron' => l(t('Cron'), 'admin/config/system/cron'))),
+    '#default_value' => variable_get('database_auto_update', TRUE),
+    '#attributes' => array('style' => array('clear: both;')),
+  );
+  
+  return $form;
+}
+
+
+function ip2locale_webhostinginfo_ip2locale_update_submit($form, $form_state) {
+  dsm('FIXME: javascript disabled');
+}
+
+
+/**
+ * Implement hook_ip2locale_get_locale()
+ */
+function ip2locale_webhostinginfo_ip2locale_get_locale($addr) {
+  include_once DRUPAL_ROOT . '/' . drupal_get_path('module', 'ip2locale_webhostinginfo') . '/ip2locale_webhostinginfo.inc'; 
+  $ip = _ip2locale_webhostinginfo_inet_aton($addr);
+  if ($result = db_query("SELECT iso2, iso3, name FROM {ip2locale_webhostinginfo} WHERE ip_from <= :ip_from AND ip_to >= :ip_to LIMIT 1", array(':ip_from' => $ip, ':ip_to' => $ip))) {
+    foreach ($result as $country) {
+      $country->ip = $addr;
+      return $country;
+    }
+  }
+  return NULL;
+}

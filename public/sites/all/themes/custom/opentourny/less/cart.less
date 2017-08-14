@@ -1,0 +1,85 @@
+#block-cart-buy-tickets-header {
+  .make-row();
+  padding-top: 15px;
+
+  @media(min-width:@screen-sm-min) and (max-width:@screen-sm-max){
+    padding-top:5px;
+  }
+
+  @media(max-width:@screen-xs-max){
+    border-top: 1px solid @otny_border;
+    z-index: 100;
+    position: relative;
+    background-color: #fff;
+  }
+
+  .block-title,
+  .total{
+    text-align:left;
+    margin:0;
+    line-height: 33px;
+    font-weight:bold;
+  }
+
+  .block-title {
+    .make-md-column(1);
+    margin-bottom:15px;
+
+    @media(min-width:@grid-float-breakpoint){
+      margin-bottom:0;
+    }
+  }
+
+  #cart-buy-tickets-form-ajax-wrapper{
+    form {
+      .make-md-column(11);
+
+      > div {
+        .make-row();
+
+        .form-type-select,
+        .button-wrapper{
+          .make-sm-column(2);
+        }
+
+        .form-item-package{
+          .make-sm-column(3);
+        }
+
+        .form-item-total{
+          .make-sm-column(1);
+        }
+
+        @media(min-width:@screen-sm-min) and (max-width:@screen-md-max){
+          .form-group{
+            margin-bottom:10px;
+          }
+          span.glyphicon{
+            font-size:10px;
+          }
+
+          .button-wrapper button{
+            font-size:12px;
+          }
+        }
+        @media(max-width:@screen-xs-max){
+          padding-bottom:10px;
+          border-bottom:1px solid @otny_border;
+        }
+      }
+    }
+  }
+}
+
+form[id^="cart-buy-tickets-form"] {
+  .button-wrapper {
+    position: relative;
+    .btn {
+      text-align: center;
+      text-transform: uppercase;
+      span{
+        margin-right:5px;
+      }
+    }
+  }
+}

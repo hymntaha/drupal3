@@ -1,0 +1,55 @@
+.node-poi{
+	&.view-mode-full{
+		.poi-top-box,
+		.neighborhood-container{
+			font-size:14px;
+			margin-bottom:25px;
+		}
+
+		.neighborhood-container{
+			margin-bottom:0;
+		}
+
+		.field-name-field-bus-stops{
+			margin-bottom:41px;
+		}
+
+		.field-name-field-slideshow{
+			margin-bottom:14px;
+		}
+
+		.field-name-body{
+			margin-bottom:15px;
+		}
+
+		.field-name-field-routes{
+			margin-bottom:47px;
+		}
+
+		.field-name-field-bottom-content-container{
+			margin-bottom:25px;
+			.content-container-content-container{
+				margin-bottom:20px;
+			}
+		}
+	}
+	&.node-teaser{
+		.field-name-title-field{
+			margin-top:-7px;
+		}
+		.teaser-image{
+			@media (max-width: @screen-xs-max){
+				margin-bottom:25px;
+			}
+		}
+	}
+	&.view-mode-line{
+		.field-name-title-field{
+			> .field-items > .field-item{
+				&.odd{
+					margin-top:25px;
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,421 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function ticketing_engine_menu() {
+  $items['ajax/ticketing-engine/tour-description/%ticketing_engine_ticket'] = array(
+    'title'            => 'Tour Description',
+    'page callback'    => 'ticketing_engine_ajax_tour_description_callback',
+    'page arguments'   => array(3),
+    'access arguments' => array('access content'),
+    'file'             => 'ticketing_engine.pages.inc',
+    'type'              => MENU_CALLBACK,
+    'delivery callback' => 'ajax_deliver',
+  );
+
+  $items['admin/opentourny/ticketing-engine'] = array(
+    'title'            => 'Ticketing Engine',
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array('ticketing_engine_admin_settings_form'),
+    'access arguments' => array('administer ticketing engine'),
+    'file'             => 'ticketing_engine.admin.inc',
+  );
+
+  $items['admin/opentourny/ticketing-engine/settings'] = array(
+    'title'            => 'Ticketing Engine Settings',
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array('ticketing_engine_admin_settings_form'),
+    'access arguments' => array('administer ticketing engine'),
+    'file'             => 'ticketing_engine.admin.inc',
+  );
+
+  $items['admin/opentourny/ticketing-engine/pricing'] = array(
+    'title'            => 'Price Listing',
+    'page callback'    => 'ticketing_engine_admin_price_listing',
+    'access arguments' => array('view ticketing engine pricing'),
+    'file'             => 'ticketing_engine.admin.inc',
+  );
+
+  $items['admin/opentourny/ticketing-engine/pricing/listing'] = array(
+    'title'            => 'Price Listing',
+    'page callback'    => 'ticketing_engine_admin_price_listing',
+    'access arguments' => array('view ticketing engine pricing'),
+    'file'             => 'ticketing_engine.admin.inc',
+    'type'             => MENU_DEFAULT_LOCAL_TASK,
+  );
+
+  $items['admin/opentourny/ticketing-engine/pricing/upload'] = array(
+    'title'            => 'Pricing Upload',
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array('ticketing_engine_admin_price_upload_form'),
+    'access arguments' => array('upload ticketing engine pricing'),
+    'file'             => 'ticketing_engine.admin.inc',
+    'type'             => MENU_LOCAL_TASK,
+  );
+
+  $items['admin/opentourny/ticketing-engine/transactions'] = array(
+    'title'            => 'Transactions Listing',
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array('ticketing_engine_admin_transaction_listing_form'),
+    'access arguments' => array('view ticketing engine pricing'),
+    'file'             => 'ticketing_engine.admin.inc',
+  );
+
+  $items['admin/opentourny/ticketing-engine/transactions/resend/%ticketing_engine_transaction'] = array(
+    'title'            => 'Transactions Listing',
+    'page callback'    => 'ticketing_engine_admin_resend_transaction_email_callback',
+    'page arguments'   => array(5),
+    'access arguments' => array('view ticketing engine pricing'),
+    'file'             => 'ticketing_engine.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function ticketing_engine_permission() {
+  return array(
+    'administer ticketing engine'          => array(
+      'title' => t('Administer Ticketing Engine'),
+    ),
+    'view ticketing engine pricing'        => array(
+      'title' => t('View Ticketing Engine Pricing'),
+    ),
+    'upload ticketing engine pricing'      => array(
+      'title' => t('Upload Ticketing Engine Pricing file'),
+    ),
+    'export ticketing engine transactions' => array(
+      'title' => t('Export Ticketing Engine Transactions'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function ticketing_engine_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == 'taxonomy_form_term') {
+    if (isset($_GET['name'])) {
+      $form['name_field']['en'][0]['value']['#default_value'] = $_GET['name'];
+    }
+
+    if (isset($_GET['tour_code'])) {
+      $form['field_tour_code'][LANGUAGE_NONE][0]['value']['#default_value'] = $_GET['tour_code'];
+    }
+  }
+}
+
+/**
+ * @param $tour_code
+ *
+ * @return bool|object
+ */
+function ticketing_engine_load_tour_from_tour_code($tour_code) {
+  static $tours = array();
+
+  if (isset($tours[$tour_code])) {
+    return $tours[$tour_code];
+  }
+
+  $tour = FALSE;
+
+  $query  = new EntityFieldQuery();
+  $result = $query->entityCondition('entity_type', 'taxonomy_term')
+                  ->fieldCondition('field_tour_code', 'value', $tour_code)
+                  ->execute();
+
+  if (isset($result['taxonomy_term'])) {
+    $tids = array_keys($result['taxonomy_term']);
+    $tid  = reset($tids);
+    if (!empty($tid)) {
+      $tour = taxonomy_term_load($tid);
+    }
+  }
+
+  $tours[$tour_code] = $tour;
+
+  return $tour;
+}
+
+/**
+ * @param $package_code
+ *
+ * @return TicketingEngineOffering[]
+ */
+function ticketing_engine_get_offerings_for_package($package_code) {
+  static $offerings = array();
+  if (!empty($offerings[$package_code])) {
+    return $offerings[$package_code];
+  }
+
+  $result = db_query('SELECT id FROM ticketing_engine_offerings WHERE package = :package_code', array(':package_code' => $package_code));
+  foreach ($result as $row) {
+    $offerings[$package_code][] = TicketingEngineOffering::load($row->id);
+  }
+
+  if (!empty($offerings[$package_code])) {
+    return $offerings[$package_code];
+  }
+
+  return array();
+}
+
+/**
+ * @param $package
+ *
+ * @return TicketingEngineTicket[]
+ *
+ * Return array of Tickets for a package node
+ */
+function ticketing_engine_get_tickets_for_package($package) {
+  static $tickets = array();
+  if (!empty($tickets[$package->nid])) {
+    return $tickets[$package->nid];
+  }
+
+  $result = db_query('SELECT id FROM ticketing_engine_tickets WHERE package = :nid', array(':nid' => $package->nid));
+  foreach ($result as $row) {
+    $ticket = TicketingEngineTicket::load($row->id);
+    if ($ticket->getTour()) {
+      $tickets[$package->nid][] = $ticket;
+    }
+  }
+
+  if (!empty($tickets[$package->nid])) {
+    return $tickets[$package->nid];
+  }
+
+  return array();
+}
+
+function ticketing_engine_get_ticket_options_for_package($package) {
+  static $options = array();
+  if (!empty($options[$package->nid])) {
+    return $options[$package->nid];
+  }
+
+  $tickets = ticketing_engine_get_tickets_for_package($package);
+  foreach ($tickets as $ticket) {
+    $options[$package->nid][$ticket->getId()] = $ticket->getDurationLabel();
+  }
+
+  if (!empty($options[$package->nid])) {
+    return $options[$package->nid];
+  }
+
+  return array();
+}
+
+/**
+ * @param TicketingEngineOffering[] $offerings
+ */
+function ticketing_engine_rebuild_tables($offerings) {
+  TicketingEngineOffering::deleteAll();
+  foreach ($offerings as $offering) {
+    $offering->save();
+  }
+
+  TicketingEngineTicket::deleteAll();
+  $packages = package_get_packages();
+  foreach ($packages as $package) {
+    $package_code = package_get_package_code($package);
+
+    if (!empty($package_code)) {
+      $query = db_select('ticketing_engine_offerings', 'a');
+      $query->innerJoin('ticketing_engine_offerings', 'c', 'a.package = c.package AND a.dated = c.dated AND a.number_of_days = c.number_of_days AND a.bus = c.bus AND a.night = c.night AND a.cruise = c.cruise');
+      $result = $query->fields('a', array('id'))
+                      ->fields('c', array('id'))
+                      ->condition('a.package', $package_code)
+                      ->condition('a.age_category', 'A')
+                      ->condition('c.age_category', 'C')
+                      ->execute();
+
+      foreach ($result as $row) {
+        $ticket = new TicketingEngineTicket();
+        $ticket->setPackage($package->nid);
+        $ticket->setTour(0);
+        $ticket->setAdultOfferingId($row->id);
+        $ticket->setChildOfferingId($row->c_id);
+
+        $ticket->save();
+      }
+    }
+  }
+}
+
+/**
+ * @param array $params
+ *
+ * @return \TicketingEngineTransaction[]
+ */
+function ticketing_engine_get_transactions($params = array()) {
+  static $transactions = array();
+
+  if (!empty($transactions)) {
+    return $transactions;
+  }
+
+  if($params['paginate']){
+    $query = db_select('ticketing_engine_transactions', 't')->extend('PagerDefault');
+    $query->limit(20);
+  }
+  else {
+    $query = db_select('ticketing_engine_transactions', 't');
+  }
+
+  $query->fields('t', array('transaction_number'));
+
+  if(!empty($params['date_from'])){
+    $query->condition('transaction_date', $params['date_from'], '>=');
+  }
+
+  if(!empty($params['date_to'])){
+    $query->condition('transaction_date', $params['date_to'], '<=');
+  }
+  
+  if(!empty($params['provider_reference'])){
+    $query->condition('provider_reference', $params['provider_reference']);
+  }
+
+  if(!empty($params['braintree_transaction_id'])){
+    $query->condition('braintree_transaction_id', $params['braintree_transaction_id']);
+  }
+
+  if(!empty($params['tour_name'])){
+    $query->condition('tour_name', $params['tour_name']);
+  }
+
+  if(!empty($params['first_name'])){
+    $query->condition('first_name', $params['first_name']);
+  }
+
+  if(!empty($params['last_name'])){
+    $query->condition('last_name', $params['last_name']);
+  }
+
+  if(!empty($params['email'])){
+    $query->condition('email', $params['email']);
+  }
+
+  if(!empty($params['coupon_code'])){
+    $query->condition('data', '%'.$params['coupon_code'].'%', 'LIKE');
+  }
+
+  $query->orderBy('transaction_date', 'DESC');
+
+  $result = $query->execute();
+  foreach ($result as $row) {
+    $transactions[] = TicketingEngineTransaction::load($row->transaction_number);
+  }
+
+  return $transactions;
+}
+
+function ticketing_engine_ticket_load($id){
+  return TicketingEngineTicket::load($id);
+}
+
+function ticketing_engine_transaction_load($id){
+  return TicketingEngineTransaction::load($id);
+}
+
+function ticketing_engine_get_ticket_options_by_product_code(){
+  $options = array();
+
+  $results = db_select('ticketing_engine_tickets', 't')
+    ->fields('t', array('id'))
+    ->execute();
+
+  foreach($results as $row){
+    $ticket = TicketingEngineTicket::load($row->id);
+    if(!empty($ticket->getAdultOffering()->getProductCode())){
+      $options[$ticket->getAdultOffering()->getProductCode()] = $ticket->getTourName();
+    }
+  }
+
+  return $options;
+}
+
+function ticketing_engine_transactions_get_transactions_listing($params = array()){
+  $headers = array(
+    t('Transaction ID'),
+    t('Transaction Date'),
+    t('Braintree Transaction ID'),
+    t('Total'),
+    t('Product Code'),
+    t('Tour Name'),
+    t('Adult Quantity'),
+    t('Child Quantity'),
+    t('Adult Price'),
+    t('Child Price'),
+    t('Travel Date'),
+    t('First Name'),
+    t('Last Name'),
+    t('Email'),
+  );
+
+  if(module_exists('coupon')){
+    $headers[] = t('Coupon');
+    $headers[] = t('Coupon Amount');
+  }
+
+  if(module_exists('cart')){
+    $headers[] = t('Re-send Email');
+  }
+
+  $transactions = ticketing_engine_get_transactions($params);
+  $rows = array();
+
+  foreach($transactions as $transaction){
+    $transaction_row = array(
+      $transaction->getProviderReference(),
+      $transaction->getTransactionDate('m/d/Y h:i:s'),
+      $transaction->getBraintreeTransactionId(),
+      $transaction->getTransactionTotal(),
+      $transaction->getProductCode(),
+      $transaction->getTourName(),
+      $transaction->getQuantities()['adult'],
+      $transaction->getQuantities()['child'],
+      $transaction->getPurchasePrices()['adult'],
+      $transaction->getPurchasePrices()['child'],
+      $transaction->getTravelDate() ? $transaction->getTravelDate('m/d/Y') : 'Open',
+      $transaction->getFirstName(),
+      $transaction->getLastName(),
+      $transaction->getEmail(),
+    );
+
+    if(module_exists('coupon')){
+      $data = $transaction->getData();
+
+      $coupon_code = '';
+      $coupon_amount = '';
+      if(isset($data['line_items'])){
+        foreach($data['line_items'] as $line_item){
+          switch($line_item['type']){
+            case 'coupon':
+              $coupon_code = $line_item['data']['coupon_code'];
+              $coupon_amount = $line_item['amount'];
+              break;
+          }
+        }
+      }
+
+      $transaction_row[] = $coupon_code;
+      $transaction_row[] = $coupon_amount;
+    }
+    
+    if(module_exists('cart')){
+      $transaction_row[] = l('resend', 'admin/opentourny/ticketing-engine/transactions/resend/'.$transaction->getTransactionNumber());
+    }
+
+    $rows[] = $transaction_row;
+  }
+
+  return array(
+    'headers' => $headers,
+    'rows' => $rows,
+  );
+}

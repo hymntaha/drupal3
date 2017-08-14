@@ -1,0 +1,6 @@
+name = Language
+description = Language processing
+package = OpenTourNY
+core = 7.x
+
+dependencies[] = gtranslate

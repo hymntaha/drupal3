@@ -1,0 +1,464 @@
+<?php
+
+/**
+ * Implements hook_init().
+ */
+function cart_init() {
+  if (isset($_GET['haid']) && !empty($_GET['haid'])) {
+    cart_set_affiliate_id($_GET['haid']);
+  }
+}
+
+function cart_set_affiliate_id($id) {
+  $_SESSION['haid'] = $id;
+}
+
+function cart_get_affiliate_id(){
+  if(!empty($_SESSION['haid'])){
+    return $_SESSION['haid'];
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function cart_menu() {
+  $items['order/your-order'] = array(
+    'title'            => t('Your Order'),
+    'page callback'    => 'cart_checkout_step_1',
+    'access arguments' => array('access content'),
+    'file'             => 'cart.pages.inc',
+  );
+
+  $items['order/your-details'] = array(
+    'title'            => t('Your Details'),
+    'page callback'    => 'cart_checkout_step_2',
+    'access arguments' => array('access content'),
+    'file'             => 'cart.pages.inc',
+  );
+
+  $items['order/confirmation'] = array(
+    'title'            => t('Confirmation'),
+    'page callback'    => 'cart_checkout_step_4',
+    'access arguments' => array('access content'),
+    'file'             => 'cart.pages.inc',
+  );
+
+  $items['order/your-voucher.pdf'] = array(
+    'title'            => t('Your Voucher'),
+    'page callback'    => 'cart_checkout_voucher',
+    'access arguments' => array('access content'),
+    'file'             => 'cart.pages.inc',
+  );
+
+  $items['admin/opentourny/checkout'] = array(
+    'title'            => t('Checkout Settings'),
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array('cart_admin_checkout_settings_form'),
+    'access arguments' => array('administer checkout'),
+    'file'             => 'cart.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function cart_permission() {
+  return array(
+    'administer checkout' => array(
+      'title' => t('Administer Checkout Settings'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_theme().
+ */
+function cart_theme($existing, $type, $theme, $path) {
+  return array(
+    'cart_checkout_header'       => array(
+      'variables' => array(
+        'current_step' => 1,
+      ),
+    ),
+    'cart_checkout'              => array(
+      'template'  => 'templates/cart-checkout',
+      'variables' => array(
+        'step_copy'    => '',
+        'header'       => array(),
+        'form'         => array(),
+        'ticket_table' => array(),
+        'extra_info'   => array(),
+      ),
+    ),
+    'cart_checkout_confirmation' => array(
+      'template'  => 'templates/cart-checkout-confirmation',
+      'variables' => array(
+        'transaction_number'  => '',
+        'transaction_details' => '',
+      ),
+    ),
+    'cart_transaction_details'   => array(
+      'variables' => array(
+        'transaction' => NULL,
+      ),
+    ),
+    'cart_transaction_email'     => array(
+      'template'  => 'templates/cart-transaction-email',
+      'variables' => array(
+        'body' => '',
+      )
+    ),
+    'cart_transaction_voucher'   => array(
+      'template'  => 'templates/cart-transaction-voucher',
+      'variables' => array(
+        'transaction' => NULL,
+      ),
+    ),
+    'cart_google_analytics_ecommerce' => array(
+      'template' => 'templates/cart-ga-ecommerce',
+      'variables' => array(
+        'transaction' => NULL,
+      )
+    ),
+  );
+}
+
+/**
+ * Implements hook_mail().
+ */
+function cart_mail($key, &$message, $params) {
+  switch ($key) {
+    case 'cart_transaction':
+      $message['subject'] = t('Your OPEN LOOP New York Purchase');
+      $message['body'][]  = $params['body'];
+      if (!empty($params['attachment'])) {
+        $message['params']['attachments'] = array($params['attachment']);
+      }
+      break;
+  }
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function cart_block_info() {
+  $blocks['buy_tickets_header'] = array(
+    'info' => 'Buy Tickets Header',
+  );
+
+  $blocks['buy_tickets_box'] = array(
+    'info' => 'Buy Tickets Box',
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function cart_block_view($delta = '') {
+  $block = array();
+  switch ($delta) {
+    case 'buy_tickets_header':
+    case 'buy_tickets_box':
+      $block['subject']         = t('Buy tickets online');
+      $block['content']['form'] = drupal_get_form('cart_buy_tickets_form');
+      if (!isset($block['content']['form']['tours']['#options']) || count($block['content']['form']['tours']['#options']) < 1) {
+        $block['content'] = '';
+      }
+      if ($delta == 'buy_tickets_box') {
+        global $language;
+        $package                    = node_load(variable_get('buy_now_default_package', ''));
+        $block['content']['markup'] = array('#markup' => '<div class="buy-tickets-copy">' . variable_get('buy_tickets_text_' . $language->language, '<h4>' . t('Buy Online & Save') . '</h4><p>' . t('Free for children under 2 years of age') . '</p>') . '</div>');
+        $block['content']['table']  = array(
+          '#theme'   => 'package_ticket_table',
+          '#package' => $package,
+        );
+      }
+      break;
+  }
+
+  return $block;
+}
+
+/**
+ * Implements hook_block_configure().
+ */
+function cart_block_configure($delta = '') {
+  $form = array();
+
+  switch ($delta) {
+    case 'buy_tickets_box':
+      foreach (language_list() as $langcode => $language) {
+        $form['buy_tickets_text_' . $langcode] = array(
+          '#type'          => 'text_format',
+          '#title'         => 'Buy Tickets Text (' . $language->name . ')',
+          '#default_value' => variable_get('buy_tickets_text_' . $langcode, '<h4>' . t('Buy Online & Save', array(), array('langcode' => $langcode)) . '</h4><p>' . t('Free for children under 2 years of age', array(), array('langcode' => $langcode)) . '</p>'),
+        );
+      }
+      break;
+  }
+
+  return $form;
+}
+
+/**
+ * Implements hook_block_save().
+ */
+function cart_block_save($delta = '', $edit = array()) {
+  switch ($delta) {
+    case 'buy_tickets_box':
+      foreach (language_list() as $langcode => $language) {
+        variable_set('buy_tickets_text_' . $langcode, $edit['buy_tickets_text_' . $langcode]['value']);
+      }
+      break;
+  }
+}
+
+function cart_buy_tickets_form($form, &$form_state) {
+  $package = FALSE;
+
+  if(!empty($form_state['values']['package'])){
+    $package = node_load($form_state['values']['package']);
+  }
+  else{
+    if ($node = menu_get_object()) {
+      if ($node->type == 'package') {
+        $package = $node;
+      }
+    }
+
+    if (empty($package)) {
+      if (!empty(variable_get('buy_now_default_package', ''))) {
+        $package = node_load(variable_get('buy_now_default_package', ''));
+      }
+    }
+  }
+
+  $form['#prefix'] = '<div id="cart-buy-tickets-form-ajax-wrapper">';
+  $form['#suffix'] = '</div>';
+
+  $form['package'] = array(
+    '#type' => 'select',
+    '#title' => t('Package'),
+    '#options' => package_get_package_options(),
+    '#title_display' => 'invisible',
+    '#default_value' => !empty($package) ? $package->nid : '',
+    '#ajax' => array(
+      'callback' => 'cart_buy_tickets_form_ajax_callback',
+      'wrapper'  => 'cart-buy-tickets-form-ajax-wrapper',
+      'method'   => 'replace',
+    ),
+  );
+
+  $form['tours'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Select ticket'),
+    '#options'       => ticketing_engine_get_ticket_options_for_package($package),
+    '#title_display' => 'invisible',
+    '#ajax' => array(
+      'callback' => 'cart_buy_tickets_form_ajax_callback',
+      'wrapper'  => 'cart-buy-tickets-form-ajax-wrapper',
+      'method'   => 'replace',
+    ),
+  );
+
+  $ticket_options = array();
+  for ($i = 1; $i <= MAX_NUM_TICKETS; $i++) {
+    if ($i == 1) {
+      $ticket_options['adults'][$i]   = $i . ' ' . t('Adult');
+      $ticket_options['children'][$i] = $i . ' ' . t('Child');
+    }
+    else {
+      $ticket_options['adults'][$i]   = $i . ' ' . t('Adults');
+      $ticket_options['children'][$i] = $i . ' ' . t('Children');
+    }
+  }
+
+  $form['adults'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Adults'),
+    '#empty_option'  => t('Adults'),
+    '#options'       => $ticket_options['adults'],
+    '#title_display' => 'invisible',
+    '#ajax' => array(
+      'callback' => 'cart_buy_tickets_form_ajax_callback',
+      'wrapper'  => 'cart-buy-tickets-form-ajax-wrapper',
+      'method'   => 'replace',
+    ),
+  );
+
+  $form['children'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Children'),
+    '#empty_option'  => t('Children'),
+    '#options'       => $ticket_options['children'],
+    '#title_display' => 'invisible',
+    '#ajax' => array(
+      'callback' => 'cart_buy_tickets_form_ajax_callback',
+      'wrapper'  => 'cart-buy-tickets-form-ajax-wrapper',
+      'method'   => 'replace',
+    ),
+  );
+
+  $total = '$0.00';
+
+  if (isset($form_state['values']['tours']) && isset($form['tours']['#options'][$form_state['values']['tours']])) {
+    $ticket = TicketingEngineTicket::load($form_state['values']['tours']);
+  }
+  else{
+    $ticket = TicketingEngineTicket::load(key($form['tours']['#options']));
+  }
+
+  if ($ticket) {
+    $adults = isset($form_state['values']['adults']) ? $form_state['values']['adults'] : 0;
+    $children = isset($form_state['values']['children']) ? $form_state['values']['children'] : 0;
+    $total = $ticket->getTotalDisplay($adults, $children);
+  }
+
+  $form['total'] = array(
+    '#markup' => '<div class="form-item-total form-item form-group"><span class="total">' . $total . '</span></div>',
+  );
+
+  $form['submit'] = array(
+    '#type'  => 'submit',
+    '#value' => t('Book Now'),
+  );
+
+  return $form;
+}
+
+function cart_buy_tickets_form_ajax_callback($form, &$form_state){
+  return $form;
+}
+
+function cart_buy_tickets_form_validate($form, &$form_state) {
+  if ($form_state['values']['adults'] == 0 && $form_state['values']['children'] == 0) {
+    form_set_error('', t('Please select number of tickets.'));
+  }
+}
+
+function cart_buy_tickets_form_submit($form, &$form_state) {
+  cart_clear_cart_checkout();
+
+  $ticket = TicketingEngineTicket::load($form_state['values']['tours']);
+
+  $cart = Cart::load();
+  $cart->setPackage($form_state['values']['package']);
+  $cart->setAdult($form_state['values']['adults']);
+  $cart->setChildren($form_state['values']['children']);
+  $cart->setDisplayTour($ticket->getTourCodeSuffix());
+  $cart->save();
+
+  $form_state['redirect'] = 'order/your-order';
+}
+
+function cart_clear_cart_checkout() {
+  Cart::delete();
+  Checkout::delete();
+  TicketingEngineTransaction::delete();
+}
+
+function cart_get_child_age_range($package) {
+  $child_age_range = field_get_items('node', $package, 'field_child_age_range');
+  if (isset($child_age_range[0]['value'])) {
+    $child_age_range = ' (' . $child_age_range[0]['value'] . ')';
+  }
+  else {
+    $child_age_range = '';
+  }
+
+  return $child_age_range;
+}
+
+/**
+ * @param TicketingEngineTransaction $transaction
+ *
+ * @throws \Exception
+ */
+function cart_send_transaction_email($transaction) {
+  global $language;
+
+  $body = variable_get('checkout_email_' . $language->language);
+  $body = str_replace(array(
+    '%first_name',
+    '%order_number'
+  ), array(
+    $transaction->getFirstName(),
+    $transaction->getProviderReference()
+  ), $body);
+
+  $params['body']       = theme('cart_transaction_email', array('body' => $body));
+  $params['attachment'] = array(
+    'filecontent' => $transaction->generatePDF('S'),
+    'filename'    => 'your-openloop-voucher.pdf',
+    'filemime'    => 'application/pdf',
+  );
+
+  drupal_mail('cart', 'cart_transaction', $transaction->getEmail(), $language, $params);
+}
+
+function cart_order_has_been_placed(){
+  $transaction = TicketingEngineTransaction::load();
+  if(request_path() == 'order/confirmation' && $transaction && !empty($_SESSION['order_placed'])){
+    unset($_SESSION['order_placed']);
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+function theme_cart_checkout_header($variables) {
+  $steps = array(
+    1 => t('Your Order'),
+    2 => t('Your Details'),
+    3 => t('Confirmation'),
+  );
+
+  $output = array();
+
+  foreach ($steps as $step_num => $step) {
+    $classes = array('checkout-step');
+    if ($variables['current_step'] == $step_num) {
+      $classes[] = 'current-step';
+    }
+    $output[] = '<span class="' . implode(' ', $classes) . '">' . $step_num . '. ' . $step . '</span>';
+  }
+
+  return implode(' > ', $output);
+}
+
+function theme_cart_transaction_details($variables) {
+  $output      = '';
+  $transaction = $variables['transaction'];
+
+  /** @var TicketingEngineTransaction $transaction */
+  if ($transaction) {
+    $quantities = $transaction->getQuantities();
+    $offering   = $transaction->getOffering();
+
+    foreach ($quantities as $age_code => $quantity) {
+      $age = t('Adult');
+      if ($age_code == 'child') {
+        $age = t('Child') . cart_get_child_age_range($offering->getPackageNode());
+      }
+      $output .= $quantities[$age_code] . 'x ' . $age . ' ' . $transaction->getTourDescription() . '<br />';
+    }
+
+    foreach($transaction->getLineItems() as $line_item){
+      if($line_item['type'] == 'coupon'){
+        $output .= t('Coupon').': '.$line_item['label'] . '<br />';
+      }
+    }
+
+    $output .= t('Total') . ': ' . $transaction->getTransactionTotalDisplay() . '<br />';
+    $output .= t('E-Voucher Validity') . ': ' . $transaction->getValidity();
+  }
+
+  return $output;
+}

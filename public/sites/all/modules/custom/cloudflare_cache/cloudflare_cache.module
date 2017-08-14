@@ -1,0 +1,136 @@
+<?php
+ /**
+ * @see hook_permission().
+ */
+function cloudflare_cache_permission() {
+  $perms = array(
+    'manage cloudflare cache settings' => array(
+      'title' => t('Manage CloudFlare cache settings'),
+    ),
+    'flush cloudflare cache' => array(
+      'title' => t('Flush CloudFlare cache'),
+    ),
+  );
+  return $perms;
+}
+
+/**
+ * @see hook_menu().
+ */
+function cloudflare_cache_menu() {
+	$items['admin/config/services/cloudflare-cache'] = array(
+    'title' => 'CloudFlare Cache Settings',
+    'description' => '',
+    'page callback' => 'cloudflare_cache_settings',
+    'page arguments' => array(),
+    'access arguments' => array('manage cloudflare cache settings'),
+    'file' => 'cloudflare_cache.admin.inc',
+    'type' => MENU_NORMAL_ITEM,
+	);
+
+	$items['admin/config/services/cloudflare-cache/flush-cloudflare-cache'] = array(
+    'title' => 'Flush CloudFlare cache',
+    'description' => '',
+    'weight' => 500,
+    'page callback' => 'cloudflare_cache_flush_callback',
+    'page arguments' => array(),
+    'access arguments' => array('flush cloudflare cache'),
+    'type' => MENU_NORMAL_ITEM,
+	);
+
+  return $items;  
+}
+
+
+function cloudflare_cache_flush_callback() {
+  return cloudflare_cache_flush();
+}
+
+function cloudflare_cache_flush($bypass_user_access = false) {
+
+  if (!user_access('flush cloudflare cache') && !$bypass_user_access) {
+    return '';
+  }
+  
+  if(!cloudflare_cache_is_enabled()){
+    drupal_set_message("Error: Missing Cloudflare Settings", 'error');
+    return '';
+  }
+  
+   $url = "https://www.cloudflare.com/api_json.html";
+   $data = array(
+             "a" => "fpurge_ts",
+             "z" => variable_get('cloudflare_cache_z', ''),
+             "u" => variable_get('cloudflare_cache_u', ''),
+             "tkn" => variable_get('cloudflare_cache_tkn', ''),
+             "v" => 1,
+             );
+   $ch = curl_init();
+   curl_setopt($ch, CURLOPT_VERBOSE, 1);
+   curl_setopt($ch, CURLOPT_FORBID_REUSE, true); 
+   curl_setopt($ch, CURLOPT_URL, $url);
+   curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1); 
+   curl_setopt($ch, CURLOPT_POST, 1);
+   curl_setopt($ch, CURLOPT_POSTFIELDS, $data ); 
+   curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+   
+   $http_result = curl_exec($ch);
+   $error = curl_error($ch);
+   $http_code = curl_getinfo($ch ,CURLINFO_HTTP_CODE);
+   curl_close($ch);
+   
+   if ($http_code != 200) {
+       drupal_set_message("Error: $error", 'error');
+   } else {
+       drupal_set_message('Cache successfully cleared');
+       drupal_set_message("<pre>" . print_r(json_decode($http_result), true) . "</pre>");
+       watchdog('CloudFlare cache', "Cache cleared", array(), WATCHDOG_NOTICE);
+   }
+  return '';
+}
+
+
+function cloudflare_cache_purge_file($uri, $https = false){
+
+
+	if(!cloudflare_cache_is_enabled()){
+		drupal_set_message("Error: Missing Cloudflare Settings", 'error');
+		return '';
+	}
+
+  $path = file_create_url($uri);
+
+	$url = "https://www.cloudflare.com/api_json.html";
+	$data = array(
+		"a" => "zone_file_purge",
+		"z" => variable_get('cloudflare_cache_z', ''),
+		"u" => variable_get('cloudflare_cache_u', ''),
+		"tkn" => variable_get('cloudflare_cache_tkn', ''),
+		"url" => url($path, array("absolute"=>true, 'https'=>$https)),
+	);
+	$ch = curl_init();
+	curl_setopt($ch, CURLOPT_VERBOSE, 1);
+	curl_setopt($ch, CURLOPT_FORBID_REUSE, true);
+	curl_setopt($ch, CURLOPT_URL, $url);
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+	curl_setopt($ch, CURLOPT_POST, 1);
+	curl_setopt($ch, CURLOPT_POSTFIELDS, $data );
+	curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+	$http_result = curl_exec($ch);
+	$error = curl_error($ch);
+	$http_code = curl_getinfo($ch ,CURLINFO_HTTP_CODE);
+	curl_close($ch);
+
+	if ($http_code != 200) {
+		drupal_set_message("Cloudflare purge error: $error", 'error');
+		watchdog('CloudFlare cache', 'Cloudflare purged for '.$path.' error: '.$error, array(), WATCHDOG_WARNING);
+	} else {
+		watchdog('CloudFlare cache', 'Cloudflare purged for '.$path.' successfully cleared', array(), WATCHDOG_INFO);
+	}
+	return '';
+}
+
+function cloudflare_cache_is_enabled(){
+  return variable_get('cloudflare_cache_z', '') && variable_get('cloudflare_cache_u', '') && variable_get('cloudflare_cache_tkn', '');
+}

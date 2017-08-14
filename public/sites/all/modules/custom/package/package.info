@@ -1,0 +1,4 @@
+name = Package
+description = Package functionality
+package = OpenTourNY
+core = 7.x

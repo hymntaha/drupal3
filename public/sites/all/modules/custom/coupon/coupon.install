@@ -1,0 +1,21 @@
+<?php
+
+function coupon_schema() {
+  $schema['used_coupon_codes'] = array(
+    'fields'      => array(
+      'email' => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+      ),
+      'code'  => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('email', 'code'),
+  );
+
+  return $schema;
+}

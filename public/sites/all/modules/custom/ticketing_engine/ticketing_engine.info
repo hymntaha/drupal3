@@ -1,0 +1,8 @@
+name = Ticketing Engine
+description = Ticketing Engine functionality
+package = OpenTourNY
+core = 7.x
+
+files[] = classes/Offering.php
+files[] = classes/Ticket.php
+files[] = classes/Transaction.php

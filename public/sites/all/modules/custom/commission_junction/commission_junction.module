@@ -1,0 +1,102 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function commission_junction_menu() {
+  $items['admin/opentourny/cj-settings'] = array(
+    'title' => 'Commission Junction Settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('commission_junction_admin_settings_form'),
+    'access arguments' => array('access opentourny settings'),
+    'file' => 'commission_junction.admin.inc',
+  );
+  
+  return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function commission_junction_theme($existing, $type, $theme, $path) {
+  return array(
+    'commission_junction_conversion' => array(
+      'variables' => array(
+        'transaction' => NULL,
+      )
+    )
+  );
+}
+
+/**
+ * @param TicketingEngineTransaction $transaction
+ *
+ * @return array()
+ */
+function commission_junction_generate_transaction_array($transaction) {
+  $cj_transaction_array = array();
+
+  if(variable_get('cj_cid', '') && variable_get('cj_type', '')){
+    $discount_amt = '0.00';
+    $coupon_code = '';
+
+    foreach($transaction->getLineItems() as $line_item){
+      if($line_item['type'] == 'coupon'){
+        $discount_amt = number_format($line_item['amount'] * -1, 2);
+        $coupon_code = $line_item['data']['coupon_code'];
+      }
+    }
+
+    $product_list = array();
+
+    if($transaction->getAdults()){
+      $product_list[] = array(
+        'ITEM' => $transaction->getOffering()->getProductCode(),
+        'AMT' => $transaction->getPurchasePrices()['adult'],
+        'QTY' => $transaction->getAdults(),
+        'DCNT' => '0.00',
+      );
+    }
+
+    if($transaction->getChildren()){
+      $product_list[] = array(
+        'ITEM' => $transaction->getOffering()->getProductCode(),
+        'AMT' => $transaction->getPurchasePrices()['child'],
+        'QTY' => $transaction->getChildren(),
+        'DCNT' => '0.00',
+      );
+    }
+
+    $cj_transaction_array = array(
+      'CJ' => array(
+        'CID' => variable_get('cj_cid', ''),
+        'TYPE' => variable_get('cj_type', ''),
+        'DISCOUNT' => $discount_amt,
+        'OID' => $transaction->getProviderReference(),
+        'CURRENCY' => 'USD',
+        'COUPON' => $coupon_code,
+        'PRODUCTLIST' => $product_list,
+      ),
+    );
+  }
+
+  return $cj_transaction_array;
+}
+
+function theme_commission_junction_conversion($variables){
+  $output = '';
+
+  if(cart_get_affiliate_id() == 'CJ'){
+    $cj_transaction_array = commission_junction_generate_transaction_array($variables['transaction']);
+
+    if(!empty($cj_transaction_array)){
+      $output .= '<script type="text/javascript">';
+      $output .= 'var MasterTmsUdo = '.drupal_json_encode($cj_transaction_array).';';
+      $output .= '</script>';
+
+      $output .= '<script>/*DO NOT ALTER *** New Site*/(function(e){var t="1471",n=document,r,i,s={http:"http://cdn.mplxtms.com/s/MasterTMS.min.js",https:"https://secure-cdn.mplxtms.com/s/MasterTMS.min.js"},o=s[/\w+/.exec(window.location.protocol)[0]];i=n.createElement("script"),i.type="text/javascript",i.async=!0,i.src=o+"#"+t,r=n.getElementsByTagName("script")[0],r.parentNode.insertBefore(i,r),i.readyState?i.onreadystatechange=function(){if(i.readyState==="loaded"||i.readyState==="complete")i.onreadystatechange=null}:i.onload=function(){try{e()}catch(t){}}})(function(){});</script>';
+    }
+  }
+
+  return $output;
+}

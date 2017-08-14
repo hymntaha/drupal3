@@ -1,0 +1,268 @@
+<?php
+
+
+define('IP2LOCALE_REDIRECT_FIRST_REQUEST_ONLY', 1);
+define('IP2LOCALE_REDIRECT_ALL_REQUESTS', 2);
+
+/**
+ * Implements hook_help().
+ */
+function ip2locale_redirect_help($path, $arg) {
+  switch ($path) {
+    case 'admin/config/regional/ip2locale/redirect':
+      $output = '<p>' . t("IP 2 Locale settings determine the how and when site redirection will occor. Available redirection modes include:") . '</p>';
+      $output .= '<ul><li>' . t('<strong>First request only.</strong> Redirection will happen for the first request only (when a page is requesed directly, or the user comes from a refering site).') . '</li>';
+      $output .= '<li>' . t('<strong>All requests.</strong> Redirection will happen on every single page request') . '</li></ul>';
+      return $output;
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function ip2locale_redirect_menu() {
+  $items['admin/config/regional/ip2locale/redirect'] = array(
+    'title' => 'Redirection',
+    'description' => 'Settings for IP to Locale Redirect.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ip2locale_redirect_admin_settings'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'ip2locale_redirect.admin.inc',
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_boot().
+ */
+function ip2locale_redirect_boot() {
+  global $language;
+  global $user;
+  
+  // If the site is in offline there is little point doing any of this as you might end up redirecting to a 503.
+  if (variable_get('site_offline', 0) == 1) {
+    return FALSE;
+  }
+
+  // Do not redirect if we are running from cron.
+  if (basename(request_uri()) == 'cron.php' || basename(request_uri()) == 'supercron.php') {
+    return FALSE;
+  }
+
+  // Do not redirect if we are running from the command line.
+  if (empty($_SERVER['SERVER_ADDR'])) {
+    return FALSE;
+  }
+
+  // Do not redirect if we are accessing the update page.
+  if (basename(request_uri()) == 'update.php') {
+    return FALSE;
+  }
+
+  // Do not redirect if we are disabled
+  if (!variable_get('ip2locale_redirect_status', 1)) {
+    return FALSE;
+  }
+  
+  if (variable_get('ip2locale_redirect_mode', IP2LOCALE_REDIRECT_FIRST_REQUEST_ONLY) == IP2LOCALE_REDIRECT_FIRST_REQUEST_ONLY) {
+    // We only want to act if the user comes to the page from an external site/direct hit
+    if (isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], $_SERVER['SERVER_NAME'])) {
+      return FALSE;
+    }
+  }
+
+  // If we ip2locale has just been processed, do not process it again.
+  if (isset($_SESSION['ip2locale_redirect_lc_processed'])) {
+    unset($_SESSION['ip2locale_redirect_lc_processed']);
+    return FALSE;
+  }
+
+  // load in the code required to deal with paths properly.
+  require_once DRUPAL_ROOT . '/' . 'includes/path.inc';
+  require_once DRUPAL_ROOT . '/' . 'includes/locale.inc';
+
+  // Initialise the language stuf early, since it's needed to lok up the current path.
+  drupal_language_initialize();
+  
+  // Should we attempt to perform a redirect on this path?
+  $page_match = ip2locale_redirect_match();
+  if (!$page_match) {
+    return FALSE;
+  }
+
+  // Load in supporting code.
+  // This is needed so that module_load_include can be used (this is used in some of the providers).
+  require_once DRUPAL_ROOT . '/' . './includes/common.inc';
+
+  $lc = NULL;
+  
+  // Try to get saved locale from cookies.
+  if (variable_get('ip2locale_save_locale', TRUE) && !empty($_COOKIE['ip2locale_lc'])) {
+    $lc = $_COOKIE['ip2locale_lc'];
+    if (variable_get('ip2locale_debug', FALSE)) {
+      drupal_set_message("IP to Locale debug: Got language code '". $lc ."' from user cookie.");
+    }
+  }
+  // Try to get saved locale from user account
+  elseif (variable_get('ip2locale_preserve_user_language', FALSE) && !empty($user) && !empty($user->language)) {
+    $lc = $user->language;
+    if (variable_get('ip2locale_debug', FALSE)) {
+      drupal_set_message("IP to Locale debug: Got language code '". $lc ."' from user account.");
+    }
+  }
+  else {
+    drupal_load('module', 'ip2locale');
+    $ip = ip2locale_ip_address();
+    if ($data = ip2locale_get_locale($ip)) {
+      $cc = $data->iso2;
+      $lc = ip2locale_redirect_map_country_to_locale($cc);
+      if (variable_get('ip2locale_save_locale', TRUE)) {
+        $_COOKIE['ip2locale_lc'] = $lc;
+      }
+    }
+  }
+
+  /**
+   * Couldn't work out the users country so we bail.
+   */
+  if (!$lc) {
+    return FALSE;
+  }
+
+  // Work out if a prefix has been explicitly requested.
+  // If so, then we won't redirect.
+  // FIXME: language_url_rewrite() doesn't exist in D7, so this clearly wont work as expected.
+  $options = array(
+    'prefix' => '',
+    'external' => FALSE,
+  );
+  if (function_exists('language_url_rewrite')) {
+    // Note that language_url_rewrite() takes path (by reference) as the first argument but does not use it at all.
+    $path = $_REQUEST['q'];
+    language_url_rewrite($path, $options);
+  }
+  if ($prefix = rtrim($options['prefix'], '/')) {
+    return;
+  }
+
+  // Get the Query String (minus the 'q'). If none set, set to NULL.
+  $query_string = drupal_get_query_parameters($_GET, array('q'));
+  if (empty($query_string)) {
+    $query_string = NULL;
+  }
+
+  // redirect the user to a language specific version if
+  // 1. the country code maps to an enabled language.
+  // 2. the country code is not the active language.
+  // 3. the user has not asked for a specific, prefixed version of a page.
+  $languages = language_list('enabled');
+  $redirect = FALSE;
+  foreach ($languages[1] as $lang) {
+    switch (variable_get('locale_language_negotiation_url_part', LOCALE_LANGUAGE_NEGOTIATION_URL_PREFIX)) {
+      case LOCALE_LANGUAGE_NEGOTIATION_URL_DOMAIN:
+        if (($lc == $lang->language) && ($language->language != $lc)) {
+          $redirect = $lang->domain ? $lang->domain . '/' . $alias : $alias;
+          continue;
+        }
+        break;
+
+      default:
+        if (($lc == $lang->language) && ($language->language != $lc)) {
+          if (arg(0) == 'node' && is_numeric(arg(1))) {
+            drupal_load('module', 'translation');
+            if (drupal_multilingual() && $translations = translation_node_get_translations(arg(1))) {
+              if (!empty($translations[$lc])) {
+                $redirect = url('node/'. $translations[$lc]->nid);
+                $redirect = trim($redirect, '/');
+                $redirect = $lang->prefix ? $lang->prefix . '/' . $redirect : $redirect;
+              }
+            }
+          }
+          else {
+            $alias = drupal_get_path_alias($_GET['q'], $language->language);
+            $redirect = $lang->prefix ? $lang->prefix . '/' . $alias : $alias;
+          }
+          continue;
+        }
+    }
+  }
+  
+  
+  if ($redirect) {
+    if (variable_get('ip2locale_debug', FALSE)) {
+      drupal_set_message('IP to Locale debug: Redirecting to ' . $redirect);
+    }
+    // Set a session variable so that we can detect if we have already run or not.
+    $_SESSION['ip2locale_redirect_lc_processed'] = TRUE;
+    drupal_load('module', 'filter'); // This is needed to use drupal_goto, since it uses url() which requires access to filter_xss_bad_protocol().
+    // TODO $query_string needs to be an array of keys and values instead of a string.
+    drupal_goto($redirect, array('query' => $query_string), 303);
+  }
+}
+
+/**
+ * ip2locale_redirect_match()
+ *
+ * check the page past and see if it should attempt to redirect or not.
+ *
+ * @param $path
+ *  the page of the page to check.
+ *
+ * @return
+ *  1 - page should attempt to redirect.
+ *  NULL - do not change page.
+ */
+function ip2locale_redirect_match() {
+  /**
+   * Check to see if the page matches the current settings.
+   */
+
+  $off_pages = variable_get('ip2locale_redirect_pages', "*");
+  
+  $path = drupal_get_path_alias($_GET['q']);
+  // Compare with the internal and path alias (if any).
+  $page_match = drupal_match_path($path, $off_pages);
+  if ($path != $_GET['q']) {
+    $page_match = $page_match || drupal_match_path($_GET['q'], $off_pages);
+  }
+  return $page_match;
+}
+
+function ip2locale_redirect_map_country_to_locale($cc) {
+  $cc = strtolower($cc);
+  
+  $custom_mappings = _ip2locale_redirect_custom_map_options(variable_get('ip2locale_redirect_custom_mapping', ''));
+  $lc = !empty($custom_mappings[$cc]) ? $custom_mappings[$cc] : $cc;
+
+  if (variable_get('ip2locale_debug', FALSE)) {
+    $mapped = $lc ? $lc : 'NONE';
+    drupal_set_message('IP to Locale debug: Country code mapped to locale ' . $mapped);
+  }
+
+  return $lc;
+}
+
+/**
+ * Utility function to split user-entered values from new-line seperated
+ * text into an array of options.
+ *
+ * @param $text
+ *   Text to be converted into a select option array.
+ * @param $flat
+ *   Optional. If specified, return the option array and exclude any optgroups.
+ */
+function _ip2locale_redirect_custom_map_options($text, $flat = FALSE) {
+  $options = array();
+  $rows = array_filter(explode("\n", trim($text)));
+  $group = NULL;
+  foreach ($rows as $option) {
+    $option = trim($option);
+    if (preg_match('/^([^,]+)\,(.*)$/', $option, $matches)) {
+      $cc = strtolower($matches[1]);
+      $lc = strtolower($matches[2]);
+      $options[$cc] = $lc;
+    }
+  }
+  return $options;
+}

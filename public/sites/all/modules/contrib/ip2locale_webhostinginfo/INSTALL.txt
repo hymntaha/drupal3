@@ -1,0 +1,12 @@
+## Description
+
+This is a data provider for IP 2 Locale which gets its data from WebHosting.info.
+
+## Requirements
+
+This module requires Drupal 7.
+
+## Installation
+
+1.  Extract the archive into sites/all/modules
+2.  Enable the module in admin/build/modules

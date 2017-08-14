@@ -1,0 +1,5 @@
+name = Review
+description = Reviews functionality
+package = OpenTourNY
+core = 7.x
+version = "7.x-0.5-dev"

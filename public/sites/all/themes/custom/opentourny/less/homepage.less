@@ -1,0 +1,196 @@
+.node-type-homepage {
+     .region-full-screen-content {
+          #block-opentourny-full-screen-content + #block-opentourny-block-ss-1 {
+               display: none;
+          }
+     }
+     @media (max-width: @screen-xs-max) {
+          aside {
+               display: none;
+          }
+     }
+}
+
+.node-homepage {
+
+     .field-name-field-video{
+          visibility: hidden;
+
+          .video-js{
+               line-height:0;
+               background-color: transparent;
+          }
+     }
+
+     .homepage-section{
+          padding:50px 0;
+
+          &.intro-section {
+               border-bottom: solid 1px @gray-lighter;
+               .featured-content {
+
+                    margin: 50px 0;
+                    .field {
+                         .slideshow-slideshow {
+                              .carousel-inner {
+                                   img {
+                                        height: inherit !important;
+                                        width: 100% !important;
+                                   }
+                              }
+                         }
+                    }
+                    .node-package {
+                         background-color:@gray-lighter;
+
+                         header {
+                              .field {
+                                   .field-item {
+                                        & > img {
+                                             height: inherit !important;
+                                             width: 100% !important;
+
+
+                                        }
+                                   }
+
+                              }
+                              h2 {
+                                   margin: 15px 18px;
+                                   margin-bottom: 10px;
+                                   text-align: left;
+
+                                   @media (max-width: @screen-sm-max) {
+                                        font-size: 14px;
+                                        margin: 10px 15px;
+                                   }
+
+                              }
+                         }
+                         footer {
+                              width: 100%;
+                              position:absolute;
+                              bottom: 0;
+                              right: 0;
+
+                              .field-name-field-teaser-price {
+                                   font-style: italic;
+                                   text-align: right;
+                                   margin: 15px 18px;
+                                   margin-top: 5px;
+
+                                   @media (max-width: @screen-sm-max) {
+                                        font-size: 14px;
+                                        margin: 10px 15px;
+                                   }
+
+                              }
+
+
+                         }
+                    }
+
+               }
+
+
+
+          }
+          &.body-section {
+               .field-name-body {
+                    padding: 30px;
+               }
+               .field-name-field-body-right {
+                    background-color: rgb(239, 239, 239);
+                    padding: 30px;
+               }
+
+          }
+          &.show-city-section {
+
+               background-color:@gray-lighter;
+
+          }
+     }
+     .visible-xs {
+          .node-package {
+               padding:25px;
+               text-align:center;
+               background-color:@gray-lighter;
+               margin-bottom: 10px;
+               header {
+                    h2 {
+
+                         margin-left: 15px;
+                         margin-top: 10px;
+
+                    }
+               }
+               footer {
+                    .field-name-field-teaser-price {
+                         font-style: italic;
+                         margin-bottom: 10px;
+                    }
+               }
+          }
+     }
+
+     .homepage-section-title{
+          font-size:24px;
+          font-weight:bold;
+          text-transform: uppercase;
+          text-align: center;
+          margin-bottom:50px;
+     }
+
+     .field-name-field-show-city-images{
+          background-color:@gray-lighter;
+          .field-item {
+               margin-bottom: 30px;
+          }
+          margin-bottom:50px;
+     }
+
+
+
+
+
+}
+
+#homepage-slide-overlays {
+     position: absolute;
+     top: 0;
+     right: 0;
+     z-index: 99;
+     width: 100%;
+     height: @homepage-slide-height;
+
+     > img {
+          position: absolute;
+          right: 0;
+          max-height: 405px !important;
+          width: auto !important;
+          cursor: pointer;
+
+          &.img-bus {
+               top: auto;
+               bottom: 0;
+               @media (max-width: @screen-md-max) {
+                    width: 50% !important;
+               }
+          }
+          &.img-save {
+               display: none;
+          }
+          &.img-promotion {
+               top: 0;
+               right: 0;
+               width: 30% !important;
+
+               @media (min-width: @screen-lg-min) {
+                    top: 62px;
+                    right: 43%;
+                    width: auto !important;
+               }
+          }
+     }
+}

@@ -1,0 +1,491 @@
+<?php
+
+define('MAX_NUM_TICKETS', 20);
+
+/**
+ * Implements hook_menu().
+ */
+function package_menu() {
+
+
+  $items['nyc-bus-tours'] = array(
+    'title'            => 'New York City Tours',
+    'page callback'    => 'packages_listing_page',
+    'page arguments'   => array('bus_tours'),
+    'access arguments' => array('access content'),
+    'file'             => 'packages.pages.inc',
+  );
+
+  $items['ajax/package-ticket-table/%node'] = array(
+    'title'             => 'Package Ticket Table',
+    'page callback'     => 'packages_ajax_ticket_table_callback',
+    'page arguments'    => array(2),
+    'access arguments'  => array('access content'),
+    'file'              => 'packages.pages.inc',
+    'type'              => MENU_CALLBACK,
+    'delivery callback' => 'ajax_deliver',
+  );
+
+  return $items;
+}
+
+function package_is_night_tour($node) {
+  if ($node->nid == 148) {
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements hook_node_view().
+ */
+function package_node_view($node, $view_mode, $langcode) {
+  if ($node->type == 'package') {
+    if ($view_mode == 'full') {
+      $booking_copy = $node->content['field_booking_copy'];
+
+      $node->content['field_booking_copy'] = array(
+        '#theme'        => 'package_booking_container',
+        '#booking_copy' => $booking_copy,
+        '#ticket_form'  => drupal_get_form('package_ticket_form', $node),
+        '#weight'       => $node->content['field_booking_copy']['#weight'],
+      );
+      $node->content['ticket_table']       = array(
+        '#theme'   => 'package_ticket_table',
+        '#package' => $node,
+        '#weight'  => ($node->content['field_booking_copy']['#weight'] + 1),
+      );
+
+      if (!empty($node->content['field_bottom_copy'])) {
+        $node->content['field_bottom_copy']['#weight']++;
+      }
+    }
+    if ($view_mode == 'teaser' || $view_mode == 'line') {
+      $node_title_stripped            = strip_tags($node->title);
+      $links['node-readmore']         = array(
+        'title'      => t('Learn More<span class="element-invisible"> about @title</span>', array('@title' => $node_title_stripped)),
+        'href'       => 'node/' . $node->nid,
+        'html'       => TRUE,
+        'attributes' => array('rel' => 'tag', 'title' => $node_title_stripped),
+      );
+      $node->content['links']['node'] = array(
+         '#theme'      => 'links__node__node',
+         '#links'      => $links,
+         '#attributes' => array('class' => array('links', 'inline')),
+      );
+   }
+}
+}
+
+/**
+* Implements hook_theme().
+*/
+function package_theme($existing, $type, $theme, $path) {
+   return array(
+      'package_listing'       => array(
+         'template' => 'templates/package-listing',
+         'variables' => array(
+            'packages' => array(),
+         ),
+      ),
+      'package_booking_container'       => array(
+         'variables' => array('booking_copy' => array(), 'ticket_form' => array()),
+      ),
+      'package_ticket_table'      => array(
+         'variables' => array('package' => array()),
+      ),
+   );
+}
+
+function package_get_packages() {
+   static $nodes = array();
+
+  if (!empty($nodes)) {
+    return $nodes;
+  }
+
+  $query = db_select('node', 'n')
+    ->fields('n', array('nid'))
+    ->condition('status', 1)
+    ->condition('type', 'package');
+
+  if (module_exists('weight')) {
+    $query->innerJoin('weight_weights', 'w', 'n.nid = w.entity_id');
+    $query->condition('w.entity_type', 'node');
+    $query->orderBy('w.weight');
+  }
+
+  $query->orderBy('title');
+
+  $result = $query->execute();
+
+  $nids = array();
+  foreach ($result as $row) {
+    $nids[] = $row->nid;
+  }
+
+  $nodes = node_load_multiple($nids);
+
+  return $nodes;
+}
+
+function package_get_package_options() {
+  static $options = array();
+
+  if (!empty($options)) {
+    return $options;
+  }
+
+  $packages = package_get_packages();
+
+  foreach ($packages as $package) {
+    $options[$package->nid] = $package->title;
+  }
+
+  return $options;
+}
+
+function package_get_package_options_by_package_code() {
+  static $options = array();
+
+  if (!empty($options)) {
+    return $options;
+  }
+
+  $packages = package_get_packages();
+  foreach ($packages as $package) {
+    $package_code = package_get_package_code($package);
+
+    if (!empty($package_code)) {
+      $options[$package_code] = $package->title;
+    }
+  }
+
+  return $options;
+}
+
+function package_get_package_code($package) {
+  $items = field_get_items('node', $package, 'field_package_code');
+
+  if (isset($items[0]['value'])) {
+    return $items[0]['value'];
+  }
+
+  return '';
+}
+
+function package_get_total($ticket_id, $adults, $children) {
+  $ticket = TicketingEngineTicket::load($ticket_id);
+  return $ticket->getTotalDisplay($adults, $children);
+}
+
+/**
+ * @param $form
+ * @param $form_state
+ * @param $package
+ * @param Cart $cart
+ *
+ * @return mixed
+ */
+function package_ticket_form($form, &$form_state, $package, $cart = NULL) {
+  $form['#prefix'] = '<div id="package-form-ajax-wrapper">';
+  $form['#suffix'] = '</div>';
+
+  if (isset($form_state['values']['package'])) {
+    $package = node_load($form_state['values']['package']);
+  }
+
+  $form['package'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Package'),
+    '#options'       => package_get_package_options(),
+    '#default_value' => $package->nid,
+    '#ajax'          => array(
+      'callback' => 'package_ticket_form_ajax_callback',
+      'wrapper'  => 'package-form-ajax-wrapper',
+      'method'   => 'replace',
+    ),
+    '#title_display' => 'invisible',
+  );
+
+  $tickets = ticketing_engine_get_tickets_for_package($package);
+
+  if (empty($tickets)) {
+    return $form;
+  }
+
+  $tours         = array();
+  $display_tours = array();
+
+  /** @var TicketingEngineTicket $ticket */
+  foreach ($tickets as $ticket) {
+    $tours[$ticket->getId()] = $ticket->getTourName();
+  }
+
+  foreach ($tickets as $ticket) {
+    if (empty($display_tours[$ticket->getTourCodeSuffix()])) {
+      $display_tours[$ticket->getTourCodeSuffix()] = $ticket->getTourName();
+    }
+  }
+
+  reset($display_tours);
+  $defaults = array(
+    'display_tour' => $cart ? $cart->getDisplayTour() : key($display_tours),
+    'date'         => $cart ? $cart->getDate() : 0,
+    'adults'       => $cart ? $cart->getAdult() : 0,
+    'children'     => $cart ? $cart->getChildren() : 0,
+  );
+
+  $defaults = array(
+    'display_tour' => isset($form_state['values']['display_tour']) && !empty($form_state['values']['display_tour']) && isset($display_tours[$form_state['values']['display_tour']]) ? $form_state['values']['display_tour'] : $defaults['display_tour'],
+    'date'         => isset($form_state['values']['date']) && !empty($form_state['values']['date']) ? $form_state['values']['date'] : $defaults['date'],
+    'adults'       => isset($form_state['values']['adults']) && !empty($form_state['values']['adults']) ? $form_state['values']['adults'] : $defaults['adults'],
+    'children'     => isset($form_state['values']['children']) && !empty($form_state['values']['children']) ? $form_state['values']['children'] : $defaults['children'],
+  );
+
+  //If the package was switched then reset the tour
+  if (!isset($display_tours[$defaults['display_tour']])) {
+    $defaults['display_tour'] = key($display_tours);
+  }
+
+  $form['display_tour'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Tour'),
+    '#options'       => $display_tours,
+    '#required'      => TRUE,
+    '#title_display' => 'invisible',
+    '#ajax'          => array(
+      'callback' => 'package_ticket_form_ajax_callback',
+      'wrapper'  => 'package-form-ajax-wrapper',
+      'method'   => 'replace',
+    ),
+    '#default_value' => $defaults['display_tour'],
+  );
+
+  $dated_options = array();
+  if ($defaults['display_tour']) {
+    foreach ($tickets as $ticket) {
+      if ($defaults['display_tour'] == $ticket->getTourCodeSuffix()) {
+        switch ($ticket->isDated()) {
+          case TRUE:
+            $dated_options[$ticket->getId()] = 'Dated';
+            break;
+          case FALSE:
+            $dated_options[$ticket->getId()] = 'Open';
+            break;
+        }
+      }
+    }
+
+    reset($dated_options);
+    $defaults['dated'] = $cart && $cart->getTicket() ? $cart->getTicket()
+                                                            ->getId() : key($dated_options);
+    $defaults['dated'] = isset($form_state['values']['dated']) && !empty($form_state['values']['dated']) && isset($dated_options[$form_state['values']['dated']]) ? $form_state['values']['dated'] : $defaults['dated'];
+
+    $form['dated'] = array(
+      '#type'          => 'select',
+      '#title'         => t('Dated'),
+      '#options'       => $dated_options,
+      '#title_display' => 'invisible',
+      '#ajax'          => array(
+        'callback' => 'package_ticket_form_ajax_callback',
+        'wrapper'  => 'package-form-ajax-wrapper',
+        'method'   => 'replace',
+      ),
+      '#default_value' => $defaults['dated'],
+    );
+  }
+
+  if (count($dated_options) == 1) {
+    $form['dated']['#type']  = 'hidden';
+    $form['dated']['#value'] = key($dated_options);
+  }
+
+  $ticket = FALSE;
+  if (isset($defaults['dated'])) {
+    $ticket = TicketingEngineTicket::load($defaults['dated']);
+  }
+
+  if ($ticket && $ticket->isDated()) {
+    $form['date'] = array(
+      '#type'                => 'date_popup',
+      '#title'               => t('Date'),
+      '#required'            => TRUE,
+      '#date_format'         => 'm/d/Y',
+      '#title_display'       => 'invisible',
+      '#date_label_position' => 'invisible',
+      '#attributes'          => array(
+        'placeholder' => 'mm/dd/yyyy',
+        'class'       => array('date-picker')
+      ),
+      '#default_value'       => $defaults['date'],
+    );
+  }
+
+  $adult_tickets = array();
+  for ($i = 0; $i <= MAX_NUM_TICKETS; $i++) {
+    if ($i == 1) {
+      $adult_tickets[$i] = $i . ' ' . t('Adult');
+    }
+    else {
+      $adult_tickets[$i] = $i . ' ' . t('Adults');
+    }
+  }
+
+  $child_tickets = array();
+  for ($i = 0; $i <= MAX_NUM_TICKETS; $i++) {
+    if ($i == 1) {
+      $child_tickets[$i] = $i . ' ' . t('Child');
+    }
+    else {
+      $child_tickets[$i] = $i . ' ' . t('Children');
+    }
+  }
+
+  $form['adults'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Adults'),
+    '#options'       => $adult_tickets,
+    '#title_display' => 'invisible',
+    '#ajax'          => array(
+      'callback' => 'package_ticket_form_ajax_callback',
+      'wrapper'  => 'package-form-ajax-wrapper',
+      'method'   => 'replace',
+    ),
+    '#default_value' => $defaults['adults'],
+  );
+
+  $form['children'] = array(
+    '#type'          => 'select',
+    '#title'         => t('Children'),
+    '#options'       => $child_tickets,
+    '#title_display' => 'invisible',
+    '#ajax'          => array(
+      'callback' => 'package_ticket_form_ajax_callback',
+      'wrapper'  => 'package-form-ajax-wrapper',
+      'method'   => 'replace',
+    ),
+    '#default_value' => $defaults['children'],
+  );
+
+  if ($ticket) {
+    $total = package_get_total($defaults['dated'], $defaults['adults'], $defaults['children']);
+
+    $form['total'] = array(
+      '#total'  => $total,
+      '#markup' => $total !== '$0.00' ? '<div class="form-item-total form-item form-group"><h4>' . t('Total') . ': <span class="total">' . $total . '</span></h4></div>' : '',
+    );
+  }
+
+  $form['submit'] = array(
+    '#type'  => 'submit',
+    '#value' => t('Book Now'),
+  );
+
+  return $form;
+}
+
+function package_ticket_form_validate($form, &$form_state) {
+  $ticket = FALSE;
+  if (isset($form_state['values']['dated'])) {
+    $ticket = TicketingEngineTicket::load($form_state['values']['dated']);
+  }
+
+  if ($ticket && $ticket->isDated()) {
+    if (!is_array($form_state['values']['date']) && strtotime($form_state['values']['date']) < strtotime('today')) {
+      form_set_error('date', t('Please choose a future date.'));
+    }
+  }
+
+  if ($form_state['values']['adults'] == 0 && $form_state['values']['children'] == 0) {
+    form_set_error('', t('Please select the number of tickets.'));
+  }
+}
+
+function package_ticket_form_submit($form, &$form_state) {
+  $ticket = TicketingEngineTicket::load($form_state['values']['dated']);
+  cart_clear_cart_checkout();
+
+  $cart = Cart::load();
+  $cart->setPackage($form_state['build_info']['args'][0]->nid);
+  $cart->setDisplayTour($form_state['values']['display_tour']);
+  $cart->setTicket($ticket);
+  $cart->setAdult($form_state['values']['adults']);
+  $cart->setChildren($form_state['values']['children']);
+
+  if (isset($form_state['values']['date']) && !is_array($form_state['values']['date'])) {
+    $cart->setDate($form_state['values']['date']);
+  }
+  else {
+    $cart->setDate();
+  }
+
+  $cart->save();
+
+  $form_state['redirect'] = 'order/your-order';
+}
+
+function package_ticket_form_ajax_callback($form, &$form_state) {
+  return $form;
+}
+
+function theme_package_booking_container($variables) {
+  $output = '<div class="booking-container">';
+  $output .= render($variables['booking_copy']);
+  $output .= render($variables['ticket_form']);
+  $output .= '</div>';
+
+  return $output;
+}
+
+function theme_package_ticket_table($variables) {
+  $output = '';
+
+  $header = array(
+    '',
+    t('Adults'),
+    t('Children'),
+  );
+
+  $rows = array();
+
+  /** @var TicketingEngineTicket $ticket */
+  foreach (ticketing_engine_get_tickets_for_package($variables['package']) as $ticket) {
+    $rows[] = array(
+      $ticket->getTourName(),
+      $ticket->getAdultPriceDisplay(),
+      $ticket->getChildPriceDisplay(),
+    );
+  }
+
+  if (!empty($rows)) {
+    $table = array(
+      '#theme'  => 'table',
+      '#header' => $header,
+      '#rows'   => $rows,
+      '#sticky' => FALSE,
+    );
+
+    $copy = field_get_items('node', $variables['package'], 'field_ticket_table_copy');
+    $copy = $copy[0]['value'];
+
+    $output = '';
+    $output .= '<div class="package-ticket-table">';
+    $output .= '<div class="buy-tickets-copy">' . $copy . '</div>';
+    $output .= render($table);
+    $output .= '</div>';
+  }
+
+  return $output;
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ */
+function package_entity_info_alter(&$entity_info) {
+   $entity_info['node']['view modes']['homepage_teaser'] = array(
+    'label' => t('Homepage Teaser'),
+    'custom settings' => TRUE,
+  );
+}

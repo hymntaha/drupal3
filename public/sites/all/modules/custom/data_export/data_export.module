@@ -1,0 +1,78 @@
+<?php
+
+/**
+ * Data Export CSV
+ * Pass an array of arrays in the $data argument to export each array as a row of csv fields.
+ *
+ * Example
+ * $data = array(
+ *    array('avatar','new','york'),
+ *    array('star','works','group'),
+ * );
+ *
+ * will output
+ *
+ * "avatar","new","york"
+ * "star","works","group"
+ *
+ * @param array $data
+ * @param array $headers
+ * @param string $filename
+ */
+function data_export_csv_export($data, $headers = array(), $filename = 'result') {
+  $filename .= '-' . date('mdYhi', strtotime('now'));
+
+  drupal_add_http_header('Content-Type', 'text/csv; utf-8');
+  drupal_add_http_header('Content-Disposition', 'attachment; filename=' . $filename . '.csv');
+
+  $fp = fopen('php://output', 'w');
+
+  if (!empty($headers)) {
+    fputcsv($fp, $headers, ',', '"');
+  }
+
+  foreach ($data as $row) {
+    fputcsv($fp, $row, ',', '"');
+  }
+
+  fclose($fp);
+
+  drupal_exit();
+}
+
+function data_export_xls_export($data, $headers = array(), $filename = 'result') {
+  $filename .= '-' . date('mdYhi', strtotime('now'));
+
+  drupal_add_http_header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  drupal_add_http_header('Content-Disposition', 'attachment; filename=' . $filename . '.xls');
+
+  $excel = new PHPExcel();
+
+  $row_num = 1;
+  $column = 'A';
+
+  if(!empty($headers)){
+    foreach($headers as $header){
+      $excel->setActiveSheetIndex(0)->setCellValue($column.$row_num, $header);
+      $column++;
+    }
+
+    $row_num++;
+  }
+
+  foreach($data as $row){
+    $column = 'A';
+
+    foreach($row as $value){
+      $excel->setActiveSheetIndex(0)->setCellValue($column.$row_num, $value);
+      $column++;
+    }
+
+    $row_num++;
+  }
+
+  $writer = PHPExcel_IOFactory::createWriter($excel, 'Excel5');
+  $writer->save('php://output');
+
+  drupal_exit();
+}

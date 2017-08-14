@@ -1,0 +1,50 @@
+<?php
+
+function route_schema(){
+  $schema['route_bus_locations'] = array(
+    'fields' => array(
+      'latitude' => array(
+        'type' => 'numeric',
+        'precision' => 10,
+        'scale' => 6,
+        'not null' => TRUE,
+      ),
+      'longitude' => array(
+        'type' => 'numeric',
+        'precision' => 10,
+        'scale' => 6,
+        'not null' => TRUE,
+      ),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Update table for bus locations
+ */
+function route_update_7120(){
+  if(db_table_exists('route_bus_locations')){
+    db_drop_table('route_bus_locations');
+  }
+
+  $schema['route_bus_locations'] = array(
+    'fields' => array(
+      'latitude' => array(
+        'type' => 'numeric',
+        'precision' => 10,
+        'scale' => 6,
+        'not null' => TRUE,
+      ),
+      'longitude' => array(
+        'type' => 'numeric',
+        'precision' => 10,
+        'scale' => 6,
+        'not null' => TRUE,
+      ),
+    ),
+  );
+
+  db_create_table('route_bus_locations',$schema['route_bus_locations']);
+}

@@ -1,0 +1,7 @@
+name = OpenTourNY Commission Junction
+description = OpenTourNY Commission Junction
+package = OpenTourNY
+core = 7.x
+version = 7.x-1.0
+
+dependencies[] = cart

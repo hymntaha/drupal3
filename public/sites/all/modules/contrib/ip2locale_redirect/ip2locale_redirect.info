@@ -1,0 +1,14 @@
+; $Id: ip2locale.info,v 1.1 2009/05/01 21:25:04 mrfelton Exp $
+name         = IP to Locale Redirect
+description  = Redirect users to site version based on IP address
+dependencies[] = ip2locale
+package      = Location
+core = 7.x
+files[] = ip2locale_redirect.module
+files[] = ip2locale_redirect.admin.inc
+; Information added by drupal.org packaging script on 2013-09-30
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "ip2locale_redirect"
+datestamp = "1380583539"
+

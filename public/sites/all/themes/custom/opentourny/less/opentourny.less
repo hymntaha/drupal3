@@ -1,0 +1,247 @@
+/* Theme colors */
+@otny_blue: #000066;
+@otny_red: #ff0000;
+@otny_white: #fff;
+@otny_black: #000;
+@otny_grey: #f0f0f0;
+@otny_gold: #8C7100;
+@otny_silver: #999;
+@otny_border: #d7d7d7;
+@otny_checkout_border: #b3b0b0;
+
+/* Web Fonts */
+@font-face {
+	font-family: Asphalt;
+	src: url('../fonts/Asphalt-MediumWeb.eot');
+	src: url('../fonts/Asphalt-MediumWeb.eot?') format('eot'),
+		url('../fonts/Asphalt-MediumWeb.woff') format('woff');
+}
+
+@font-face {
+	font-family: Calibre;
+	src: url('../fonts/CalibreWeb-Regular.eot');
+	src: url('../fonts/CalibreWeb-Regular.eot?') format('eot'),
+		url('../fonts/CalibreWeb-Regular.woff') format('woff'),
+		url('../fonts/CalibreWeb-Regular.ttf')  format('truetype');
+	font-weight: normal;
+	font-style: normal;
+}
+
+@font-face {
+	font-family: Calibre;
+	src: url('../fonts/CalibreWeb-Semibold.eot');
+	src: url('../fonts/CalibreWeb-Semibold.eot?') format('eot'),
+		url('../fonts/CalibreWeb-Semibold.woff') format('woff'),
+		url('../fonts/CalibreWeb-Semibold.ttf')  format('truetype');
+	font-weight: 600;
+	font-style: normal;
+}
+
+@font-face {
+	font-family: Calibre;
+	src: url('../fonts/CalibreWeb-Bold.eot');
+	src: url('../fonts/CalibreWeb-Bold.eot?') format('eot'),
+		url('../fonts/CalibreWeb-Bold.woff') format('woff'),
+		url('../fonts/CalibreWeb-Bold.ttf')  format('truetype');
+	font-weight: 900;
+	font-style: normal;
+}
+
+
+/* Bootstrap Overrides */
+
+//Fonts
+@font-family-sans-serif:  Calibre, Arial, "Helvetica Neue", Helvetica, sans-serif;
+
+//Navbar
+@navbar-default-link-color: @otny_blue;
+@navbar-default-link-hover-color: @otny_white;
+@navbar-default-link-hover-bg: @otny_blue;
+@navbar-default-link-active-color: @navbar-default-link-hover-color;
+@navbar-default-link-active-bg: @navbar-default-link-hover-bg;
+
+@homepage-slide-height: 504px;
+
+/* Mixins */
+.spacing-reset{
+	margin:0;
+	border:0;
+	padding:0;
+}
+
+.list-reset{
+	.spacing-reset;
+	list-style:none;
+	li{
+		.spacing-reset;
+	}
+}
+
+.background-cover{
+	background-size: cover;
+	-webkit-background-size: cover;
+	-moz-background-size: cover;
+	-o-background-size: cover;
+}
+
+//Open Tour NY Universal Styles
+
+.otny-color-blue{
+	color: @otny_blue !important;
+}
+
+.otny-color-red{
+	color: @otny_red !important;
+}
+
+.otny-color-white{
+	color: @otny_white !important;
+}
+
+.otny-color-black{
+	color: @otny_black !important;
+}
+
+.otny-color-grey{
+	color: @otny_grey !important;
+}
+
+.otny-color-gold{
+	color: @otny_gold !important;
+}
+
+.otny-color-silver{
+	color: @otny_silver !important;
+}
+
+.otny-color-link-blue{
+	a{
+		color: @otny_blue !important;
+	}
+}
+
+.otny-color-link-red{
+	a{
+		color: @otny_red !important;
+	}
+}
+
+.otny-color-link-white{
+	a{
+		color: @otny_white !important;
+	}
+}
+
+.otny-color-link-black{
+	a{
+		color: @otny_black !important;
+	}
+}
+
+.otny-color-link-grey{
+	a{
+		color: @otny_grey !important;
+	}
+}
+
+.otny-color-link-gold{
+	a{
+		color: @otny_gold !important;
+	}
+}
+
+.otny-color-link-silver{
+	a{
+		color: @otny_silver !important;
+	}
+}
+
+.otny-bg-blue{
+	background-color: @otny_blue !important;
+}
+
+.otny-bg-red{
+	background-color: @otny_red !important;
+}
+
+.otny-bg-white{
+	background-color: @otny_white !important;
+}
+
+.otny-bg-black{
+	background-color: @otny_black !important;
+}
+
+.otny-bg-grey{
+	background-color: @otny_grey !important;
+}
+
+.otny-bg-gold{
+	background-color: @otny_gold !important;
+}
+
+.otny-bg-silver{
+	background-color: @otny_silver !important;
+}
+
+.otny-bg-transparent{
+	background-color: transparent !important;
+}
+
+.otny-border-color-blue{
+	border-color: @otny_blue !important;
+}
+
+.otny-border-color-red{
+	border-color: @otny_red !important;
+}
+
+.otny-border-color-white{
+	border-color: @otny_white !important;
+}
+
+.otny-border-color-black{
+	border-color: @otny_black !important;
+}
+
+.otny-border-color-grey{
+	border-color: @otny_grey !important;
+}
+
+.otny-border-color-gold{
+	border-color: @otny_gold !important;
+}
+
+.otny-border-color-silver{
+	border-color: @otny_silver !important;
+}
+
+.font-asphalt{
+	font-family:Asphalt !important;
+}
+
+.font-calibre{
+	font-family:Calibre !important;
+}
+
+.font-calibre-semi-bold{
+	font-family:Calibre !important;
+	font-weight:600 !important;
+}
+
+.font-calibre-bold{
+	font-family:Calibre !important;
+	font-weight:900 !important;
+}
+
+.otny-header{
+	font-size:36px;
+	line-height:38px;
+	margin:0;
+}
+
+.divider{
+	padding-bottom:45px;
+	border-bottom:1px solid @otny_border;
+	margin-bottom:50px;
+}

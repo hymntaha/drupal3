@@ -1,0 +1,39 @@
+<?php
+
+/**
+ * Implements hook_init().
+ */
+function language_init() {
+	$_SESSION['language_display_gtranslate'] = false;
+}
+
+/**
+ * Implements hook_node_view().
+ */
+function language_node_view($node, $view_mode, $langcode) {
+	if($view_mode == 'full'){
+		if(!isset($node->translations->data[$langcode]) || $node->translations->data[$langcode]['google_translate']){
+			language_set_gtranslate_language($langcode);
+		}
+	}
+}
+
+/**
+ * Implements hook_block_view_alter().
+ */
+function language_block_view_alter(&$data, $block) {
+	if($block->delta == 'gtranslate'){
+		if(!$_SESSION['language_display_gtranslate']){
+			$data['content'] = '';
+		}
+	}
+}
+
+function language_set_gtranslate_language($langcode){
+	if($langcode == 'zh-hans'){
+		$langcode = 'zh-CN';
+	}
+	drupal_add_js(array('language' => array('code' => variable_get('gtranslate_main_lang', 'en').'|'.$langcode)), 'setting');
+	drupal_add_js(drupal_get_path('module', 'language').'/js/gtranslate.js');
+	$_SESSION['language_display_gtranslate'] = true;
+}

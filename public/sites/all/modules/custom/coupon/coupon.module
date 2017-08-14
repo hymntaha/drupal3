@@ -1,0 +1,385 @@
+<?php
+
+define('COUPON_APPLY_TO_TICKET', 'ticket');
+define('COUPON_APPLY_TO_SUBTOTAL', 'subtotal');
+
+/**
+ * Implements hook_admin_paths().
+ */
+function coupon_admin_paths() {
+  $paths = array(
+    'coupon/coupon/*/delete' => TRUE,
+    'coupon/coupon/*/edit'   => TRUE,
+  );
+  return $paths;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function coupon_form_cart_step_1_form_alter(&$form, &$form_state) {
+  $form['#submit'][] = 'coupon_form_cart_step_1_submit';
+}
+
+function coupon_form_cart_step_1_submit(&$form, &$form_state) {
+  $cart = Cart::load();
+  $checkout = Checkout::load();
+
+  if($cart && $checkout){
+    if($cart->getLineItemOfType('coupon')){
+      $coupon = coupon_load_by_code($cart->getLineItemOfType('coupon')->getData()['coupon_code']);
+      $message = coupon_validate_checkout($coupon, $checkout->getEmail());
+
+      if(empty($message)){
+        coupon_add_to_cart($coupon);
+      }
+      else{
+        $cart->removeLineItemOfType('coupon');
+        drupal_set_message(t($message), 'error');
+      }
+    }
+  }
+  else{
+    if($cart){
+      $cart->removeLineItemOfType('coupon');
+    }
+  }
+}
+
+/**
+ * @param stdClass $coupon
+ * @param string $email
+ *
+ * @return string
+ */
+function coupon_validate_checkout($coupon, $email){
+  $message = '';
+
+  if (!$coupon || !coupon_is_active($coupon)) {
+    $message = t('Coupon does not exist.');
+  }
+  else if (empty($email)) {
+    $message = t('Email address is required to apply a coupon.');
+  }
+  else if (coupon_is_used($coupon, $email)) {
+    $message = t('You have already used this coupon.');
+  }
+  else if (!coupon_check_date_range($coupon)) {
+    $message = t('Coupon is expired');
+  }
+  else if (!coupon_check_products($coupon)) {
+    $message = t('Coupon can not be used with this ticket.');
+  }
+
+  return $message;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function coupon_form_cart_step_2_form_alter(&$form, &$form_state) {
+  $cart = Cart::load();
+
+  $coupon = FALSE;
+  if ($line_item = $cart->getLineItemOfType('coupon')) {
+    $coupon = coupon_load_by_code($line_item->getData()['coupon_code']);
+  }
+
+  $defaults['coupon'] = $coupon ? $line_item->getData()['coupon_code'] : '';
+
+  $form['coupon_wrapper'] = array(
+    '#type'       => 'container',
+    '#attributes' => array(
+      'class' => array(
+        'coupon-wrapper',
+      )
+    ),
+    '#weight'     => 10,
+  );
+
+  $form['coupon_wrapper']['title'] = array(
+    '#markup' => '<h4>'.t('Promotions').'</h4>',
+  );
+
+  $form['coupon_wrapper']['coupon'] = array(
+    '#title'         => t('Coupon Code'),
+    '#type'          => 'textfield',
+    '#default_value' => $defaults['coupon'],
+  );
+
+  $form['coupon_wrapper']['coupon_submit'] = array(
+    '#type'                    => 'button',
+    '#value'                   => t('Apply'),
+    '#limit_validation_errors' => array(
+      array('coupon')
+    ),
+    '#submit'                  => array(),
+    '#ajax'                    => array(
+      'callback' => 'coupon_cart_step_2_form_ajax_callback',
+      'wrapper'  => 'cart-step-2-form-ajax-wrapper',
+      'method'   => 'replace',
+    ),
+  );
+
+  $form['#validate'][] = 'coupon_cart_step_2_form_validate';
+}
+
+function coupon_cart_step_2_form_ajax_callback($form, &$form_state) {
+  return $form;
+}
+
+function coupon_cart_step_2_form_validate($form, &$form_state) {
+  $cart = Cart::load();
+
+  if (!empty($form_state['values']['coupon'])) {
+    $coupon  = coupon_load_by_code($form_state['values']['coupon']);
+    $message = coupon_validate_checkout($coupon, $form_state['values']['email']);
+
+    if (!empty($message)) {
+      $cart->removeLineItemOfType('coupon');
+      form_set_error('coupon', $message);
+    }
+    else {
+      coupon_add_to_cart($coupon);
+      drupal_set_message(t('Coupon applied.'));
+    }
+  }
+  else {
+    $cart->removeLineItemOfType('coupon');
+  }
+}
+
+/**
+ * Implements hook_cart_transmach_request_alter().
+ *
+ * @param $booking_request
+ * @param TicketingEngineTransaction $transaction
+ */
+function coupon_cart_transmach_request_alter(&$booking_request, $transaction) {
+  $data = $transaction->getData();
+
+  if(isset($data['line_items'])){
+    foreach($data['line_items'] as $line_item){
+      if($line_item['type'] == 'coupon'){
+        $booking_request['DiscountCode'] = $line_item['data']['coupon_code'];
+      }
+    }
+  }
+}
+
+function coupon_load_by_code($code) {
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'coupon')
+        ->entityCondition('bundle', 'coupon')
+        ->fieldCondition('field_coupon_code', 'value', strtoupper($code));
+
+  $result = $query->execute();
+
+  if (isset($result['coupon'])) {
+    $coupon_ids = array_keys($result['coupon']);
+    $coupons    = entity_load('coupon', $coupon_ids);
+
+    return reset($coupons);
+  }
+
+  return FALSE;
+}
+
+function coupon_is_active($coupon) {
+  $items = field_get_items('coupon', $coupon, 'field_active');
+  if (isset($items[0]['value'])) {
+    return $items[0]['value'];
+  }
+
+  return FALSE;
+}
+
+function coupon_check_date_range($coupon) {
+  $items = field_get_items('coupon', $coupon, 'field_valid_date_range');
+
+  if (empty($items)) {
+    return TRUE;
+  }
+  else {
+    $start_timestamp = strtotime($items[0]['value']);
+    $end_timestamp   = strtotime($items[0]['value2']);
+    $now_timestamp   = strtotime(date('Y-m-d'));
+
+    if ($start_timestamp == $end_timestamp) {
+      return $start_timestamp == $now_timestamp;
+    }
+    else {
+      return $now_timestamp >= $start_timestamp && $now_timestamp <= $end_timestamp;
+    }
+  }
+
+}
+
+function coupon_get_amount($coupon) {
+  $items = field_get_items('coupon', $coupon, 'field_coupon_amount');
+  if (isset($items[0]['value'])) {
+    return $items[0]['value'];
+  }
+
+  return FALSE;
+}
+
+function coupon_get_apply_to($coupon) {
+  $items = field_get_items('coupon', $coupon, 'field_coupon_apply_to');
+  if (isset($items[0]['value'])) {
+    return $items[0]['value'];
+  }
+
+  return COUPON_APPLY_TO_SUBTOTAL;
+}
+
+function coupon_check_products($coupon) {
+  $cart  = Cart::load();
+  $items = field_get_items('coupon', $coupon, 'field_valid_products');
+
+  if (empty($items)) {
+    return TRUE;
+  }
+  else {
+    $products = coupon_parse_product_list($items[0]['value']);
+
+    return in_array($cart->getTicket()
+                         ->getAdultOffering()
+                         ->getProductCode(), $products);
+  }
+}
+
+function coupon_is_used($coupon, $email) {
+  $items = field_get_items('coupon', $coupon, 'field_coupon_code');
+
+  return db_select('used_coupon_codes', 'u')
+    ->fields('u')
+    ->condition('email', $email)
+    ->condition('code', $items[0]['value'])
+    ->countQuery()->execute()->fetchField();
+}
+
+function coupon_add_to_cart($coupon) {
+  $cart = Cart::load();
+
+  $cart->removeLineItemOfType('coupon');
+
+  $line_item = new CartLineItem();
+
+  $label = field_get_items('coupon', $coupon, 'field_label');
+  $code  = field_get_items('coupon', $coupon, 'field_coupon_code');
+
+  $data  = array(
+    'coupon_code' => $code[0]['value'],
+  );
+
+  $discount_amount = coupon_get_discount_amount($coupon, $cart);
+
+  if($discount_amount < 0){
+    $line_item->setLabel($label[0]['value']);
+    $line_item->setType('coupon');
+    $line_item->setAmount($discount_amount);
+    $line_item->setData($data);
+
+    $cart->addLineItem($line_item);
+  }
+}
+
+/**
+ * @param stdClass $coupon
+ * @param Cart $cart
+ *
+ * @return int|string
+ */
+function coupon_get_discount_amount($coupon, $cart) {
+  $amount = coupon_get_amount($coupon);
+  $apply_to = coupon_get_apply_to($coupon);
+
+  if($apply_to == COUPON_APPLY_TO_SUBTOTAL){
+    if (is_numeric($amount)) {
+      return $amount * -1;
+    }
+
+    if (substr($amount, -1, 1) == '%') {
+      $percent = substr($amount, 0, -1);
+      if (is_numeric($percent)) {
+        return round((($percent / 100) * $cart->getTotal()) * -1, 2);
+      }
+    }
+  }
+  
+  if($apply_to == COUPON_APPLY_TO_TICKET){
+    if(is_numeric($amount)){
+      return $cart->getQuantity() * $amount * -1;
+    }
+
+    if (substr($amount, -1, 1) == '%') {
+      $percent = substr($amount, 0, -1);
+      if (is_numeric($percent)) {
+        $adult_discount = round((($percent / 100) * $cart->getTicket()->getAdultPrice()), 2) * $cart->getAdult() * -1;
+        $children_discount = round((($percent / 100) * $cart->getTicket()->getChildPrice()), 2) * $cart->getChildren() * -1;
+
+        return $adult_discount + $children_discount;
+      }
+    }
+  }
+
+  return 0;
+}
+
+function coupon_parse_product_list($text) {
+  $items = array();
+  $lines = explode("\n", $text);
+  foreach ($lines as $line) {
+    $pieces = explode(" ", $line);
+
+    foreach ($pieces as $piece) {
+      $style = preg_replace('/^[\pZ\pC]+|[\pZ\pC]+$/u', '', $piece);
+      $style = trim($style);
+      if ($style != '') {
+        $items[$style] = $style;
+      }
+    }
+  }
+
+  return $items;
+}
+
+function coupon_get_coupon_options(){
+  $options = array();
+
+  $coupon_ids = db_select('eck_coupon','c')->fields('c', array('id'))->execute()->fetchAllKeyed(0,0);
+
+  $coupons = entity_load('coupon', $coupon_ids);
+  foreach($coupons as $coupon){
+    $coupon_code = field_get_items('coupon', $coupon, 'field_coupon_code');
+    $options[$coupon_code[0]['value']] = $coupon->title;
+  }
+
+  if(!empty($options)){
+    $options = array('' => 'All Coupons') + $options;
+  }
+
+  return $options;
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function coupon_form_alter(&$form, &$form_state, $form_id) {
+  if($form_id == 'eck__entity__form_edit_coupon_coupon' || $form_id == 'eck__entity__form_add_coupon_coupon'){
+    $form['#attached']['js'] = array(
+      drupal_get_path('module', 'coupon').'/js/coupon.admin.js',
+    );
+
+    $form['field_valid_products']['#attributes']['style'] = 'display:none;';
+
+    $form['valid_products_select'] = array(
+      '#type' => 'checkboxes',
+      '#title' => t('Valid Products'),
+      '#options' => ticketing_engine_get_ticket_options_by_product_code(),
+      '#weight' => 7,
+      '#default_value' => coupon_parse_product_list($form['field_valid_products'][LANGUAGE_NONE][0]['value']['#default_value']),
+    );
+  }
+}

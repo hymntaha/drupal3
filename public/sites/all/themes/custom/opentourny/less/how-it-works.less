@@ -1,0 +1,151 @@
+.node-type-how-it-works {
+  .region-full-screen-content {
+    #block-opentourny-full-screen-content + #block-opentourny-block-ss-1 {
+      display: none;
+    }
+  }
+  @media (max-width: @screen-xs-max) {
+    aside {
+      display: none;
+    }
+  }
+}
+
+.node-how-it-works {
+
+  .field-name-field-video {
+    visibility: hidden;
+
+    .video-js {
+      line-height: 0;
+      background-color: transparent;
+    }
+  }
+
+  .fluid-page-section {
+    padding: 50px 0;
+
+    &.get-your-pass-section {
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: cover;
+
+      .container {
+        & > div {
+          padding: 30px 25px;
+          &.transparent-bg {
+            background-color: #fff;
+            zoom: 1;
+            filter: alpha(opacity=90);
+            opacity: 0.90;
+
+          }
+        }
+      }
+    }
+
+    &.attractions-section {
+
+      .field-name-field-poi-body {
+        background-color: @gray-lighter;
+        padding: 20px;
+      }
+    }
+    &.meet-your-bus-section {
+      background-color: @gray-lighter;
+    }
+
+    &.routes-section {
+
+      background-color: @gray-lighter;
+      .field-name-field-routes-section-map-image {
+
+        margin-top: 40px;
+      }
+      .field-name-field-routes-section-body {
+        p {
+          margin-top: 20px;
+
+        }
+
+      }
+    }
+
+    &.intro-section {
+      .featured-content {
+        margin: 50px 0;
+        .field {
+          .slideshow-slideshow {
+            .carousel-inner {
+              img {
+                height: 100% !important;
+                width: 100% !important;
+              }
+            }
+          }
+        }
+      }
+      .node-package {
+        background-color: @gray-lighter;
+
+        min-height: 286px;
+
+        header {
+          h2 {
+            margin: 15px 18px;
+            margin-bottom: 5px;
+            text-align: left;
+
+          }
+        }
+        footer {
+          width: 100%;
+
+          .field-name-field-teaser-price {
+            font-style: italic;
+            text-align: right;
+            margin: 15px 18px;
+            margin-top: 5px;
+
+          }
+
+        }
+      }
+
+    }
+  }
+  .visible-xs {
+    .node-package {
+
+      text-align: center;
+      background-color: @gray-lighter;
+      margin-bottom: 10px;
+      header {
+        h2 {
+
+          margin-left: 15px;
+          margin-top: 10px;
+
+        }
+      }
+      footer {
+        .field-name-field-teaser-price {
+          font-style: italic;
+          margin-bottom: 10px;
+        }
+      }
+    }
+  }
+
+  .fluid-page-section-title {
+    font-size: 24px;
+    font-weight: bold;
+    text-transform: uppercase;
+    text-align: center;
+    margin-bottom: 50px;
+  }
+
+  .field-name-field-show-city-images {
+    margin-bottom: 50px;
+  }
+}

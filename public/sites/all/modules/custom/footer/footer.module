@@ -1,0 +1,155 @@
+<?php
+
+/**
+ * Implements hook_block_info().
+ */
+function footer_block_info() {
+  $blocks['footer_social']    = array(
+    'info'  => t('Footer Social Network Icons'),
+    'cache' => DRUPAL_CACHE_GLOBAL,
+  );
+  $blocks['footer_copyright'] = array(
+    'info'  => t('Footer Copyright'),
+    'cache' => DRUPAL_CACHE_GLOBAL,
+  );
+
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_configure().
+ */
+function footer_block_configure($delta = '') {
+  $form = array();
+
+  switch ($delta) {
+    case 'footer_social':
+      $social_options = footer_block_get_social_options();
+      $form['social_links'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Social Links'),
+        '#collapsible' => TRUE,
+        '#collapsed' => TRUE,
+      );
+      foreach ($social_options as $machine_name => $social) {
+        $form['social_links']['footer_block_' . $machine_name] = array(
+          '#type'          => 'textfield',
+          '#title'         => $social . ' Link',
+          '#default_value' => variable_get('footer_block_' . $machine_name, ''),
+        );
+      }
+      $form['promo_block'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Promo Block'),
+        '#collapsible' => TRUE,
+        '#collapsed' => TRUE,
+      );
+      foreach(language_list() as $language){
+        $form['promo_block']['promo_block_'.$language->language] = array(
+          '#type' => 'text_format',
+          '#title' => 'Promo Block '.$language->language,
+          '#default_value' => variable_get('promo_block_'.$language->language, ''),
+        );
+      }
+      break;
+    case 'footer_copyright':
+      $form['footer_copyright_company'] = array(
+        '#type'          => 'textfield',
+        '#title'         => 'Footer Copyright Company',
+        '#default_value' => variable_get('footer_copyright_company', ''),
+      );
+      break;
+  }
+
+  return $form;
+}
+
+/**
+ * Implements hook_block_save().
+ */
+function footer_block_save($delta = '', $edit = array()) {
+  switch ($delta) {
+    case 'footer_social':
+      $options = footer_block_get_social_options();
+      foreach ($options as $machine_name => $option) {
+        variable_set('footer_block_' . $machine_name, $edit['footer_block_' . $machine_name]);
+      }
+      foreach(language_list() as $language){
+        variable_set('promo_block_'.$language->language, $edit['promo_block_'.$language->language]['value']);
+      }
+      break;
+    case 'footer_copyright':
+      variable_set('footer_copyright_company', $edit['footer_copyright_company']);
+      break;
+  }
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function footer_block_view($delta = '') {
+  $block = array();
+
+  switch ($delta) {
+    case 'footer_social':
+      $options          = footer_block_get_social_options();
+      $block['subject'] = t('Footer Social Icons');
+      $block['content'] = theme('footer_social', array('options' => $options));
+      break;
+    case 'footer_copyright':
+      $block['subject'] = t('Footer Copyright');
+      $block['content'] = theme('footer_copyright', array('company' => variable_get('footer_copyright_company', '')));
+  }
+  return $block;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function footer_theme($existing, $type, $theme, $path) {
+  return array(
+    'footer_social'    => array(
+      'variables' => array('options' => array()),
+    ),
+    'footer_copyright' => array(
+      'variables' => array('company' => ''),
+    ),
+  );
+}
+
+function theme_footer_social($variables) {
+  $output  = '';
+  $options = $variables['options'];
+  foreach ($options as $machine_name => $option) {
+    $link = variable_get('footer_block_' . $machine_name, '');
+    if ($link) {
+      $output .= l($option, $link, array(
+        'attributes' => array(
+          'target' => '_blank',
+          'class'  => array(
+            'footer-social',
+            str_replace('_', '-', $machine_name)
+          )
+        )
+      ));
+    }
+  }
+  return $output;
+}
+
+function theme_footer_copyright($variables) {
+  return '<div class="copyright">&copy; ' . date('Y') . ' ' . $variables['company'] . '</div>';
+}
+
+function footer_block_get_social_options() {
+  $options = array(
+    'facebook'     => 'Facebook',
+    'twitter'      => 'Twitter',
+    'google_plus'  => 'Google Plus',
+    'pinterest'    => 'Pinterest',
+    'trip_advisor' => 'Trip Advisor',
+    'instagram'    => 'Instagram',
+  );
+
+  return $options;
+}

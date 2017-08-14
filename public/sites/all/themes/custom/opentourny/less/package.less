@@ -1,0 +1,315 @@
+.taxonomy-term {
+   &.vocabulary-package-type {
+      margin-bottom: 10px;
+
+      & > h3 {
+         margin: 0;
+         margin-bottom: 30px;
+
+
+      }
+      & > .content {
+         margin-bottom: 20px;
+         .taxonomy-term-description {
+              p {
+                   margin-bottom: 30px;
+                   line-height: 24px;
+
+              }
+
+         }
+      }
+
+
+   }
+
+
+}
+.node-package {
+   .field-name-body {
+      margin-bottom: 23px;
+   }
+
+   .field-name-field-slideshow {
+      margin-bottom: 24px;
+   }
+
+   .booking-container {
+      padding: 25px;
+      margin-bottom:25px;
+
+      #hudson-buy-tickets-form {
+         margin-top: 35px;
+
+         > div {
+            .make-row();
+         }
+
+         .form-item-servicenum,
+         .button-wrapper {
+            .make-sm-column(12);
+         }
+
+         .form-item-passengers,
+         .form-item-apassengers {
+            .make-sm-column(6);
+         }
+      }
+   }
+
+   .field-name-field-bottom-copy{
+      margin-top:12px;
+   }
+
+
+
+
+
+   &.node-teaser {
+
+      margin-bottom: 40px;
+      h2 {
+         margin: 20px 0;
+    }
+
+     @media(max-width:@screen-xs-max){
+       height: 100% !important;
+     }
+
+    .field-name-field-teaser-price {
+         background-color:@gray-lighter;
+         text-align:center;
+         padding: 3px;
+         color: #000;
+
+         a {
+            display:inline-block;
+            height: 100%;
+            width: 100%;
+            font-weight: normal;
+            font-style: italic;
+               color: #000 !important;
+
+            &:hover {
+               text-decoration: none;
+            }
+
+            & > span {
+               &:first-child {
+
+                  margin: 0 5px;
+
+
+               }
+               &:last-child {
+
+               & > span.teaser-price-arrow {
+                  font-size:17px;
+                  margin-left: 5px;
+
+               }
+               color: red !important;
+               font-weight: bold;
+               font-style: normal;
+
+            }
+
+            }
+
+         }
+      }
+      footer {
+
+         .node-readmore {
+                        margin: 18px 0;
+                        &:after {
+                           content: "\003e";
+                           font-size:18px;
+                           margin-left: 5px;
+
+
+                        }
+
+
+         }
+
+               .package-items {
+
+
+      }
+
+   }
+   }
+   &.node-teaser,
+   &.view-mode-line {
+      margin-bottom: 30px;
+      position: relative;
+      .background-cover;
+
+
+      header > h2 {
+         text-transform: uppercase;
+      }
+
+      @media (max-width: @screen-xs-max) {
+         .field-name-body {
+            .field-item {
+               * {
+                  display: none;
+               }
+               p:first-child {
+                  display: block;
+               }
+            }
+         }
+      }
+
+      .list-inline {
+         margin: 0;
+
+         .node-readmore a {
+            font-size: 14px;
+         }
+      }
+
+      form[id^="package-hudson-form"] {
+         .button-wrapper {
+            .make-xs-column(8);
+            .make-sm-column(3);
+            .make-md-column(2);
+            position: absolute;
+            bottom: 28px;
+            right: 0;
+            z-index: 100;
+
+            button {
+               border: 0;
+            }
+         }
+      }
+   }
+   &.view-mode-line {
+      padding: 0;
+      .field-name-field-feature-image {
+         float: left;
+         margin-right: 25px;
+      }
+      .feature-content {
+         padding: 25px;
+         border: 1px solid #e1e1e1;
+      }
+      form[id^="package-hudson-form"] {
+         .button-wrapper {;
+            position: static;
+            width: 80%;
+            float: none;
+            margin: 60px auto 0 auto;
+            @media (max-width: @screen-sm-max) {
+               width: 100%;
+            }
+
+         }
+      }
+      ul.links {
+         margin-top: 14px;
+      }
+      .node-footer {
+         padding-top: 20px;
+      }
+   }
+
+  &.view-mode-homepage_teaser{
+    position: relative;
+  }
+
+   &.view-mode-full{
+      .form-item-package{
+         display:none;
+      }
+   }
+}
+
+.package-ticket-table {
+
+   .table {
+      margin-bottom: 0;
+
+      > thead > tr > th {
+         font-size: 14px;
+         line-height: 18px;
+         font-weight: 900;
+         padding-right: 5px;
+         padding-top: 8px;
+         padding-bottom: 8px;
+         min-width: 77px;
+
+         &:first-child {
+            padding-left: 24px;
+            padding-right: 0;
+         }
+
+         span {
+            font-weight: normal;
+            font-size: 11px;
+
+            @media (max-width: @screen-sm-max) {
+               display: block;
+               line-height: 10px;
+            }
+         }
+      }
+
+      > tbody > tr > td {
+         font-size: 14px;
+         line-height: 25px;
+         font-weight: 600;
+         padding-right: 5px;
+
+         &:first-child {
+            padding-left: 24px;
+         }
+
+         .online-price {
+            font-size: 22px;
+            color: @otny_blue;
+         }
+         .regular-price {
+            font-size: 14px;
+            text-decoration: line-through;
+         }
+      }
+   }
+}
+
+.container-inline-date {
+   clear: none;
+
+   .form-item {
+      width: 100%;
+      input {
+         width: 100%;
+      }
+   }
+
+   > .form-item {
+      margin-bottom: 15px;
+   }
+
+   .date-padding {
+      padding: 0;
+      float: none;
+   }
+
+   .ui-datepicker-trigger {
+      .glyphicon;
+      .glyphicon-calendar;
+      position: absolute;
+      right: 15px;
+      top: 0;
+      line-height: 24px;
+      padding-right: 4px;
+      img {
+         display: none;
+      }
+   }
+}

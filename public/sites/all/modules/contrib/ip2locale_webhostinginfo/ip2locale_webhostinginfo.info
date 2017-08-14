@@ -1,0 +1,14 @@
+; $Id: ip2locale.info,v 1.1 2009/05/01 21:25:04 mrfelton Exp $
+name         = IP to Locale - WebHosting.info
+description  = WebHosting.info Data provider for IP to Locale
+dependencies[] = ip2locale
+package      = Location
+core = 7.x
+files[] = ip2locale_webhostinginfo.module
+files[] = ip2locale_webhostinginfo.inc
+; Information added by drupal.org packaging script on 2013-09-30
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "ip2locale_webhostinginfo"
+datestamp = "1380583541"
+

@@ -1,0 +1,221 @@
+<?php
+
+function ticketing_engine_schema() {
+  $schema['ticketing_engine_tickets'] = array(
+    'fields'      => array(
+      'id'                => array(
+        'type'     => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'package'           => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'tour'              => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'adult_offering_id' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'child_offering_id' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('id'),
+    'indexes'     => array(
+      'package' => array('package'),
+    ),
+  );
+
+  $schema['ticketing_engine_offerings'] = array(
+    'fields'      => array(
+      'id'             => array(
+        'type'     => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'product_code'   => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+      ),
+      'package'        => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+      ),
+      'dated'          => array(
+        'type'     => 'int',
+        'size'     => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'number_of_days' => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'bus'            => array(
+        'type'     => 'int',
+        'size'     => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'night'          => array(
+        'type'     => 'int',
+        'size'     => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'cruise'         => array(
+        'type'     => 'int',
+        'size'     => 'tiny',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'description'    => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+      ),
+      'age_category'   => array(
+        'type'     => 'varchar',
+        'length'   => 1,
+        'not null' => TRUE,
+      ),
+      'price'          => array(
+        'type'      => 'numeric',
+        'size'      => 'normal',
+        'not null'  => TRUE,
+        'default'   => 0,
+        'precision' => 10,
+        'scale'     => 2,
+      ),
+      'created'        => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      )
+    ),
+    'primary key' => array('id'),
+    'indexes'     => array(
+      'product_code' => array('product_code'),
+      'package'      => array('package'),
+      'tour_code'    => array(
+        'package',
+        'dated',
+        'number_of_days',
+        'bus',
+        'night',
+        'cruise',
+      ),
+    ),
+  );
+
+  $schema['ticketing_engine_transactions'] = array(
+    'fields'      => array(
+      'transaction_number'       => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+      ),
+      'braintree_transaction_id' => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+      ),
+      'transaction_date'         => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'transaction_total'        => array(
+        'type'      => 'numeric',
+        'size'      => 'normal',
+        'not null'  => TRUE,
+        'default'   => 0,
+        'precision' => 10,
+        'scale'     => 2,
+      ),
+      'product_code'             => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+      ),
+      'tour_name'                => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+      ),
+      'quantities'               => array(
+        'type'      => 'text',
+        'not null'  => TRUE,
+        'serialize' => TRUE,
+      ),
+      'purchase_prices'          => array(
+        'type'      => 'text',
+        'not null'  => TRUE,
+        'serialize' => TRUE,
+      ),
+      'travel_date'              => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'status'                   => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+      ),
+      'status_updated'           => array(
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'default'  => NULL,
+      ),
+      'first_name'               => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+      ),
+      'last_name'                => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+      ),
+      'email'                    => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+      ),
+      'barcode'                  => array(
+        'type'     => 'text',
+        'not null' => TRUE,
+      ),
+      'provider_reference'       => array(
+        'type'     => 'varchar',
+        'length'   => 255,
+        'not null' => TRUE,
+      ),
+      'data'                     => array(
+        'type'      => 'text',
+        'not null'  => TRUE,
+        'serialize' => TRUE,
+      )
+    ),
+    'primary key' => array('transaction_number'),
+    'indexes'     => array(
+      'transaction_date' => array('transaction_date'),
+      'status'           => array('status'),
+    ),
+  );
+
+  return $schema;
+}
